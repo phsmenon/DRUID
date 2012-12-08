@@ -16,56 +16,59 @@ data WXWidget =
   
 type WidgetDelegatePair = (Integer, WXWidget)
 
+data UIEvent = Command Integer
+
 data DruidData = DruidData { 
     widgets :: [WidgetDelegatePair], 
     maxId :: Integer, 
-    createOps :: [Druid ()],
-    updateOps :: [Druid ()],
-    removeOps :: [Druid ()]
+    createOps, updateOps, removeOps :: [Druid ()]
 }
+
+instance Show DruidData where
+  show r = let sWidgets = "Ids: " ++ (intercalate "," $ map (show.fst) $ widgets r) in
+           let sMaxId = "Max Id: " ++ (show $ maxId r) in
+           let sCreateOps = "Create op counts: " ++ (show . length $ createOps r) in
+           let sUpdateOps = "Update op counts: " ++ (show . length $ updateOps r) in
+           let sRemoveOps = "Remove op counts: " ++ (show . length $ removeOps r) in
+           "{ " ++ intercalate ", " [sWidgets, sMaxId, sCreateOps, sUpdateOps, sRemoveOps] ++ " }"
 
 initialDruidState = DruidData { 
   widgets = [], maxId = 1, createOps = [], updateOps = [], removeOps = [] 
 }
-
+ 
 type Druid = StateT DruidData IO
 
 getNextId :: Druid Integer
-getNextId = do
-  r@DruidData { maxId = currentId } <- get
-  put $ r { maxId = currentId + 1 }
-  return currentId
+getNextId = get >>= \r@DruidData { maxId = id } -> put r { maxId = id + 1 } >> return id
   
 addCreateOp :: Druid () -> Druid ()
-addCreateOp op = do
-  r@DruidData { createOps = ops } <- get
-  put $ r { createOps = ops ++ [op] }
-  return ()
+addCreateOp op = get >>= \r@DruidData { createOps = ops } -> put r { createOps = ops ++ [op] }
 
 addUpdateOp :: Druid () -> Druid ()
-addUpdateOp op = do
-  r@DruidData { updateOps = ops } <- get
-  put $ r { updateOps = ops ++ [op] }
-  return ()
+addUpdateOp op = get >>= \r@DruidData { updateOps = ops } -> put r { updateOps = ops ++ [op] }
   
 addRemoveOp :: Druid () -> Druid ()
-addRemoveOp op = do
-  r@DruidData { removeOps = ops } <- get
-  put $ r { removeOps = ops ++ [op] }
-  return ()
+addRemoveOp op = get >>= \r@DruidData { removeOps = ops } -> put r { removeOps = ops ++ [op] }
+
+clearCreateOps :: Druid ()
+clearCreateOps = get >>= \r -> put r { createOps = [] }
+
+clearUpdateOps :: Druid ()
+clearUpdateOps = get >>= \r -> put r { updateOps = [] }
+
+clearRemoveOps :: Druid ()
+clearRemoveOps = get >>= \r -> put r { removeOps = [] }
   
 stoveDelegate :: Integer -> WXWidget -> Druid ()
-stoveDelegate id widget = do
-  r@DruidData { widgets = wlist } <- get
-  put $ r { widgets = (id,widget):wlist }
-  return ()
+stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> put r { widgets = (id,widget):lst }
 
--- TODO: Better error handling / messages
 getWXWidget :: Integer -> Druid WXWidget 
 getWXWidget id = do 
-  DruidData { widgets = wlist } <- get
-  let (Just (id', w)) = find (\(id', w) -> id' == id) wlist
-  return w
+  r@DruidData { widgets = wlist } <- get
+  let res = find (\(id', w) -> id' == id) wlist
+  case res of 
+    Nothing        -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
+    Just (_, w)    -> return w
   
 createTopLevelWidget :: Integer -> IO a -> (a -> WXWidget) -> Druid ()
 createTopLevelWidget id delegate wrapper = do
@@ -78,15 +81,30 @@ createControlWidget id parent delegate wrapper = do
   w <- liftIO $ delegate parentWindow
   stoveDelegate id (wrapper w)  
 
-doCreateOps :: Druid ()
-doCreateOps = do
-  r@DruidData { createOps = ops } <- get
-  sequence_ ops
-  put $ r { createOps = [] }  -- Clear the createOps, now that we are done with it
+doOps :: Druid ()
+doOps = do
+  DruidData { createOps = cOps, updateOps = uOps, removeOps = rOps } <- get
+  -- get >>= \x -> liftIO $ traceIO (show x)
+  liftIO $ traceIO ("To create: " ++ (show $ length $ cOps ++ uOps ++ rOps))
+  sequence_ $ cOps ++ uOps ++ rOps
+  clearCreateOps >> clearUpdateOps >> clearRemoveOps
+  -- get >>= \x -> liftIO $ traceIO (show x)
 
 data Frame = Frame Integer
 data Button = Button Integer
 data Label = Label Integer
+
+---------------------------------------------------------------
+
+deferRegisterEventHandler :: b -> (b -> Druid w) -> WX.Event w a -> a -> Druid ()
+deferRegisterEventHandler id lookup event handler = do
+  let action wxobj = WX.set wxobj [WX.on event := handler]
+  addUpdateOp $ lookup id >>= \v -> liftIO $ action v
+  
+standardEventReceiver :: UIEvent -> IO ()
+standardEventReceiver e = 
+  case e of 
+    Command id -> putStrLn $ "Command event received for " ++ show id
 
 ---------------------------------------------------------------
 
@@ -130,6 +148,8 @@ createButton :: Frame -> String -> Druid Button
 createButton (Frame parent) text = do
   id <- getNextId
   addCreateOp $ createControlWidget id parent (\w -> WX.button w [WX.text := text]) WXButton
+  -- Very rough
+  deferRegisterEventHandler id getWXButton WX.command (standardEventReceiver $ Command id)
   return $ Button id
   
 getWXButton :: Integer -> Druid (WX.Button ())
@@ -141,5 +161,3 @@ setButtonProperty :: Button -> [Prop (WX.Button ())] -> Druid ()
 setButtonProperty (Button id) props = do
   w <- getWXButton id
   liftIO $ WX.set w props  
-
----------------------------------------------------------------  

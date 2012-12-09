@@ -1,19 +1,16 @@
 module Druid.Types where
 
---import Graphics.UI.WX
+import Druid.DruidMonad
 
 ------------------------------------------------------------------
 -- Data Types for the Engine
 ------------------------------------------------------------------
 
-data UIEvent = Initialize
-
 type Stimulus = (Double, Maybe UIEvent)
 
-data Behavior a = Behavior (Stimulus -> IO (Behavior a, a))
+data Behavior a = Behavior (Stimulus -> Druid (Behavior a, a))
 
-data Event a = Event (Stimulus -> IO (Event a, Maybe a))
-
+data Event a = Event (Stimulus -> Druid (Event a, Maybe a))
 
 
 class Num a => Vec a where

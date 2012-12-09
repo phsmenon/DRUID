@@ -3,10 +3,10 @@ module Druid.Engine where
 import Data.Maybe
 import Data.IORef
 import Debug.Trace
-
-import Graphics.UI.WX hiding (Event)
+import Control.Monad.IO.Class
 
 import Druid.Types
+import Druid.DruidMonad
 
 -----------------------------------------------------------------
 -- Some Type Abbreviations
@@ -52,7 +52,7 @@ traceB :: Show a => String -> Behavior a -> Behavior a
 -- Print a signal/time, prefixed by the string
 traceB text (Behavior a0) = f a0 where
   f a = Behavior $ \s -> do (Behavior a', av) <- a s
-                            putStrLn $ text ++ (show av)
+                            liftIO $ putStrLn $ text ++ (show av)
                             return (f a', av) -- Do not change the age
 							
 traceE :: Show a => String -> Event a -> Event a
@@ -60,7 +60,7 @@ traceE :: Show a => String -> Event a -> Event a
 traceE text (Event a0) = f a0 where
   f a = Event $ \s -> do (Event a', ev) <- a s
                          case ev of 
-                           Just v  -> do putStrLn $ text ++ (show v)
+                           Just v  -> do liftIO $ putStrLn $ text ++ (show v)
                                          return (f a', ev)
                            Nothing -> return (f a', ev)
 
@@ -75,18 +75,19 @@ choose = lift3 (\test i e -> if test then i else e)
 -- Observation
 -----------------------------------------------------------------
 
-observe :: Behavior a -> IO (Behavior a)
+-- TODO: FIX THIS
+observe :: Behavior a -> Druid (Behavior a)
 -- Create an observing behavior.  Use an IORef to hold the observed
 -- value.  Make the built-in mouse function an observation.
-observe (Behavior a0) = do ref <- newIORef Nothing
+observe (Behavior a0) = do ref <- liftIO $ newIORef Nothing
                            return $ f ref a0
   where
-    f ref a = Behavior $ \s@(t,_) -> do v <- readIORef ref
+    f ref a = Behavior $ \s@(t,_) -> do v <- liftIO $ readIORef ref
                                         case v of 
                                           Just (t', res) | t' == t -> return res
                                           _ -> do (Behavior a', av) <- a s
                                                   let res = (f ref a', av)
-                                                  writeIORef ref $ Just (t, res)
+                                                  liftIO $ writeIORef ref $ Just (t, res)
                                                   return res
 
 -----------------------------------------------------------------
@@ -176,10 +177,10 @@ snap a b = f a b where
 -----------------------------------------------------------------
 
 
-switch :: Behavior a -> Event (IO (Behavior a)) -> Behavior a
+switch :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
 -- Switch to a new behavior *every time* an event occurs
 switch a0 e0 = f a0 e0 where
-  f :: Behavior a -> Event (IO (Behavior a)) -> Behavior a
+  f :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
   f (Behavior a) (Event e) = Behavior $ \s -> do (ee', ev) <- e s
                                                  case ev of
                                                    Just b -> do Behavior newf <- b
@@ -188,7 +189,7 @@ switch a0 e0 = f a0 e0 where
                                                    Nothing -> do (ba', av) <- a s 
                                                                  return (f ba' ee', av)
 												 
-untilB :: Behavior a -> Event (IO (Behavior a)) -> Behavior a
+untilB :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
 -- Switch to a new behavior *the first time* an event occurs
 untilB b e = switch b $ once e 
 

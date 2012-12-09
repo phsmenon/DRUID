@@ -1,4 +1,4 @@
-module DruidMonad where
+module Druid.DruidMonad where
 
 import Control.Monad.State
 

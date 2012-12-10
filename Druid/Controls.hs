@@ -36,7 +36,13 @@ createControlWidget id parent delegate wrapper = do
   w <- liftIO $ delegate parentWindow
   stoveDelegate id (wrapper w)  
 
--- setWidgetProperty :: Integer -> (Integer -> )  
+setWidgetProperty :: Integer -> (Integer -> Druid w) -> [Prop w] -> Druid ()  
+setWidgetProperty id lookup properties = do
+  w <- lookup id
+  liftIO $ WX.set w properties
+
+setWidgetProperty id f
+setWidgetProperty (f id)
 
 -------------------------------------------------------------------------
 
@@ -52,9 +58,7 @@ getWXFrame id = do
   return w
 
 setFrameProperty :: Frame -> [Prop (WX.Frame ())] -> Druid ()
-setFrameProperty (Frame id) props = do
-  w <- getWXFrame id
-  liftIO $ WX.set w props
+setFrameProperty (Frame id) props = addUpdateOp $ setWidgetProperty id getWXFrame props
 
 ---------------------------------------------------------------  
 
@@ -70,9 +74,7 @@ getWXLabel id = do
   return w
   
 setLabelProperty :: Label -> [Prop (WX.StaticText ())] -> Druid ()
-setLabelProperty (Label id) props = do
-  w <- getWXLabel id
-  liftIO $ WX.set w props
+setLabelProperty (Label id) props = addUpdateOp $ setWidgetProperty id getWXLabel props
   
 ---------------------------------------------------------------  
   
@@ -89,9 +91,7 @@ getWXButton id = do
   return w
     
 setButtonProperty :: Button -> [Prop (WX.Button ())] -> Druid ()
-setButtonProperty (Button id) props = do
-  w <- getWXButton id
-  liftIO $ WX.set w props  
+setButtonProperty (Button id) props = addUpdateOp $ setWidgetProperty id getWXButton props
 
 registerButtonCommandEventHandler :: Button -> (UIEvent -> IO ()) -> Druid ()
 registerButtonCommandEventHandler (Button id) handler = 

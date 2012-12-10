@@ -3,7 +3,9 @@ module Druid.Engine where
 import Data.Maybe
 import Data.IORef
 import Debug.Trace
+import Control.Monad.State
 import Control.Monad.IO.Class
+import Data.Time.Clock
 
 import Druid.Types
 import Druid.DruidMonad
@@ -233,6 +235,22 @@ clock duration = f Nothing where
 -- Reactive Loop
 ------------------------------------------------------
 
- -- doStep :: Druid Behavior UIEvent -> 
+type StepperData = IORef (Maybe (DruidData, Behavior (Druid ())))
 
+doStep :: Behavior (Druid ()) -> UIEvent -> Druid (Behavior (Druid ()))
+doStep (Behavior beh) event = do
+  utcTime <- liftIO getCurrentTime
+  let time = realToFrac $ utctDayTime utcTime :: Double
+  (beh', op) <- beh (time, Just event)
+  op
+  return beh'
+
+handleEvent :: StepperData -> UIEvent -> IO ()
+handleEvent stepperData event = do
+  dta <- readIORef stepperData
+  case dta of 
+    Nothing -> error "Internal error: stepperData should not be NULL inside handleEvent"
+    Just (state, beh) -> do
+      (beh', state') <- runStateT (doStep beh event) state
+      writeIORef stepperData (Just (state', beh'))
 

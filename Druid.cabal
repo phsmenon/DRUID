@@ -17,4 +17,4 @@ cabal-version:       >=1.8
 executable Druid
   main-is: Main.hs
   -- other-modules:       
-  build-depends:       base, wx ==0.13.*, clock, transformers, mtl
+  build-depends:       base, wx, time, transformers, mtl

@@ -120,6 +120,10 @@ integral (Behavior a) = f a (0, 0) where
 never :: Event a
 never = Event $ const . return $ (never, Nothing)
 											 
+stimEvent :: (UIEvent -> Maybe v) -> Event v
+stimEvent fn = f
+  where f = Event(\(_, sev) -> return (f, maybe Nothing fn sev))
+											 
 -----------------------------------------------------------------
 -- Event Combinators
 -----------------------------------------------------------------
@@ -222,4 +226,13 @@ clock duration = f Nothing where
                                                return (f (Just t'), Just ())
                                              else
                                                return (f start, Nothing)
+
+
+
+------------------------------------------------------
+-- Reactive Loop
+------------------------------------------------------
+
+ -- doStep :: Druid Behavior UIEvent -> 
+
 

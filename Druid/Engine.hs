@@ -235,10 +235,8 @@ clock duration = f Nothing where
 -- Reactive Loop
 ------------------------------------------------------
 
-type StepperData = IORef (Maybe (DruidData, Behavior (Druid ())))
-
-doStep :: Behavior (Druid ()) -> UIEvent -> Druid (Behavior (Druid ()))
-doStep (Behavior beh) event = do
+stepBehavior :: Behavior (Druid ()) -> UIEvent -> Druid (Behavior (Druid ()))
+stepBehavior (Behavior beh) event = do
   utcTime <- liftIO getCurrentTime
   let time = realToFrac $ utctDayTime utcTime :: Double
   (beh', op) <- beh (time, Just event)
@@ -251,6 +249,24 @@ handleEvent stepperData event = do
   case dta of 
     Nothing -> error "Internal error: stepperData should not be NULL inside handleEvent"
     Just (state, beh) -> do
-      (beh', state') <- runStateT (doStep beh event) state
+      (beh', state') <- runStateT (stepBehavior beh event) state
       writeIORef stepperData (Just (state', beh'))
 
+runDruid :: Druid a -> DruidData -> IO (a, DruidData)
+runDruid druidOp state = runStateT druidOp state
+
+runDruid_ :: Druid () -> DruidData -> IO DruidData
+runDruid_ druidOp state = runDruid druidOp state >>= return . snd
+
+start :: Maybe (Druid ()) -> Behavior (Druid ()) -> IO ()
+start init behavior = do
+  druidData <- initializeDruidData -- behavior
+  case init of
+    Just d -> do
+      druidData' <- runDruid_ d druidData
+      writeIORef (stepperData druidData') $ Just (druidData', behavior)
+    Nothing -> writeIORef (stepperData druidData) $ Just (druidData, behavior)
+      
+      
+
+    

@@ -5,9 +5,26 @@ import Control.Monad.State
 import Data.List
 import Data.Maybe
 import Debug.Trace
+import Data.IORef
 
 import qualified Graphics.UI.WX as WX  hiding ((:=))
 import Graphics.UI.WX(Prop((:=)))
+
+------------------------------------------------------------------
+-- Data Types for the Engine
+------------------------------------------------------------------
+
+type Stimulus = (Double, Maybe UIEvent)
+
+data Behavior a = Behavior (Stimulus -> Druid (Behavior a, a))
+
+data Event a = Event (Stimulus -> Druid (Event a, Maybe a))
+
+
+class Num a => Vec a where
+  (*^) :: Double -> a -> a
+
+------------------------------------------------------------------
 
 data WXWidget = 
     WXFrame (WX.Frame ())
@@ -22,8 +39,12 @@ data UIEvent = Command Integer
 data DruidData = DruidData { 
     widgets :: [WidgetDelegatePair], 
     maxId :: Integer, 
-    createOps, updateOps, removeOps :: [Druid ()]
+    createOps, updateOps, removeOps :: [Druid ()],
+    stepperData :: StepperData,
+    timeStep :: Double
 }
+
+type StepperData = IORef (Maybe (DruidData, Behavior (Druid ())))
 
 instance Show DruidData where
   show r = let sWidgets = "Ids: " ++ (intercalate "," $ map (show.fst) $ widgets r) in
@@ -33,11 +54,13 @@ instance Show DruidData where
            let sRemoveOps = "Remove op counts: " ++ (show . length $ removeOps r) in
            "{ " ++ intercalate ", " [sWidgets, sMaxId, sCreateOps, sUpdateOps, sRemoveOps] ++ " }"
 
-initialDruidState = DruidData { 
-  widgets = [], maxId = 1, createOps = [], updateOps = [], removeOps = [] 
-}
  
 type Druid = StateT DruidData IO
+
+initializeDruidData :: IO DruidData
+initializeDruidData = do
+  ref <- newIORef Nothing
+  return $ DruidData { widgets = [], maxId = 1, createOps = [], updateOps = [], removeOps = [], stepperData = ref}
 
 getNextId :: Druid Integer
 getNextId = get >>= \r@DruidData { maxId = id } -> put r { maxId = id + 1 } >> return id
@@ -59,7 +82,7 @@ clearUpdateOps = get >>= \r -> put r { updateOps = [] }
 
 clearRemoveOps :: Druid ()
 clearRemoveOps = get >>= \r -> put r { removeOps = [] }
-  
+
 stoveDelegate :: Integer -> WXWidget -> Druid ()
 stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> put r { widgets = (id,widget):lst }
 

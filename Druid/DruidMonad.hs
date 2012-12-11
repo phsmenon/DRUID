@@ -1,6 +1,10 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+
 module Druid.DruidMonad where
 
 import Control.Monad.State
+import Control.Monad
+import Control.Applicative
 
 import Data.List
 import Data.Maybe
@@ -40,11 +44,11 @@ data DruidData = DruidData {
     widgets :: [WidgetDelegatePair], 
     maxId :: Integer, 
     createOps, updateOps, removeOps :: [Druid ()],
-    stepperData :: StepperData,
+    stepperDataRef :: StepperDataRef,
     timeStep :: Double
 }
 
-type StepperData = IORef (Maybe (DruidData, Behavior (Druid ())))
+type StepperDataRef = IORef (Maybe (DruidData, Behavior (Druid ())))
 
 instance Show DruidData where
   show r = let sWidgets = "Ids: " ++ (intercalate "," $ map (show.fst) $ widgets r) in
@@ -58,10 +62,11 @@ instance Show DruidData where
  
 type Druid = StateT DruidData IO
 
+
 initializeDruidData :: IO DruidData
 initializeDruidData = do
   ref <- newIORef Nothing
-  return $ DruidData { widgets = [], maxId = 1, timeStep = 0, createOps = [], updateOps = [], removeOps = [], stepperData = ref}
+  return $ DruidData { widgets = [], maxId = 1, timeStep = 0, createOps = [], updateOps = [], removeOps = [], stepperDataRef = ref}
 
 getNextId :: Druid Integer
 getNextId = get >>= \r@DruidData { maxId = id } -> put r { maxId = id + 1 } >> return id

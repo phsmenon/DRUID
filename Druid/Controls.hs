@@ -8,10 +8,18 @@ import Control.Monad.IO.Class
 import Druid.DruidMonad
 
 -------------------------------------------------------------------------
---
+
 data Frame = Frame Integer
 data Button = Button Integer
 data Label = Label Integer
+
+---------------------------------------------------------------
+
+class Control w where
+  getId :: w -> Integer
+
+class (Control w) => CommandEventSource w where
+  registerCommandListener :: w -> (UIEvent -> IO ()) -> Druid ()
 
 ---------------------------------------------------------------
 
@@ -20,10 +28,6 @@ deferRegisterEventHandler id lookup event handler = do
   let action wxobj = WX.set wxobj [WX.on event := handler]
   addUpdateOp $ lookup id >>= \v -> liftIO $ action v
   
-standardEventReceiver :: UIEvent -> IO ()
-standardEventReceiver e = 
-  case e of 
-    Command id -> putStrLn $ "Command event received for " ++ show id
 
 createTopLevelWidget :: Integer -> IO a -> (a -> WXWidget) -> Druid ()
 createTopLevelWidget id delegate wrapper = do
@@ -57,6 +61,9 @@ getWXFrame id = do
 setFrameProperty :: Frame -> [Prop (WX.Frame ())] -> Druid ()
 setFrameProperty (Frame id) props = addUpdateOp $ setWidgetProperty id getWXFrame props
 
+instance Control Frame where
+  getId (Frame id) = id
+
 ---------------------------------------------------------------  
 
 createLabel :: Frame -> String -> Druid Label
@@ -73,6 +80,9 @@ getWXLabel id = do
 setLabelProperty :: Label -> [Prop (WX.StaticText ())] -> Druid ()
 setLabelProperty (Label id) props = addUpdateOp $ setWidgetProperty id getWXLabel props
   
+instance Control Label where
+  getId (Label id) = id
+
 ---------------------------------------------------------------  
   
 createButton :: Frame -> String -> Druid Button
@@ -90,7 +100,11 @@ getWXButton id = do
 setButtonProperty :: Button -> [Prop (WX.Button ())] -> Druid ()
 setButtonProperty (Button id) props = addUpdateOp $ setWidgetProperty id getWXButton props
 
-registerButtonCommandEventHandler :: Button -> (UIEvent -> IO ()) -> Druid ()
-registerButtonCommandEventHandler (Button id) handler = 
-  deferRegisterEventHandler id getWXButton WX.command (standardEventReceiver $ Command id)
+instance Control Button where
+  getId (Button id) = id
+
+instance CommandEventSource Button where
+  registerCommandListener (Button id) handler = deferRegisterEventHandler id getWXButton WX.command (handler $ Command id)
+
+
   

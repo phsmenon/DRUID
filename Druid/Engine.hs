@@ -3,6 +3,7 @@ module Druid.Engine where
 import Data.Maybe
 import Data.IORef
 import Debug.Trace
+import Control.Applicative
 import Control.Monad.State
 import Control.Monad.IO.Class
 import Data.Time.Clock
@@ -249,7 +250,12 @@ stepBehavior (Behavior beh) event = do
   -- Return the new behavior
   return beh'
 
-handleEvent :: StepperData -> UIEvent -> IO ()
+standardEventReceiver :: Druid (UIEvent -> IO())
+standardEventReceiver = do
+  ref <- get >>= return . stepperDataRef 
+  return $ handleEvent ref
+
+handleEvent :: StepperDataRef -> UIEvent -> IO ()
 handleEvent stepperData event = do
   dta <- readIORef stepperData
   case dta of 
@@ -259,15 +265,13 @@ handleEvent stepperData event = do
       writeIORef stepperData (Just (state', beh'))
 
 
-startEngine :: Maybe (Druid ()) -> Behavior (Druid ()) -> IO ()
-startEngine init behavior = do
+startEngine :: Druid(Behavior (Druid ())) -> IO ()
+startEngine behavior = do
   druidData <- initializeDruidData -- behavior
-  case init of
-    Just d -> do
-      -- Run the initialization code in the druid monad and reify ops immediately
-      druidData' <- execDruid d druidData >>= execDruid doOps
-      writeIORef (stepperData druidData') $ Just (druidData', behavior)
-    Nothing -> writeIORef (stepperData druidData) $ Just (druidData, behavior)
+  -- Get the behavior out of the monad and reify changes immediately
+  (beh', druidData') <- runDruid (behavior <* doOps) druidData 
+  writeIORef (stepperDataRef druidData') $ Just (druidData', beh')
+  
       
       
 

@@ -41,9 +41,6 @@ setWidgetProperty id lookup properties = do
   w <- lookup id
   liftIO $ WX.set w properties
 
-setWidgetProperty id f
-setWidgetProperty (f id)
-
 -------------------------------------------------------------------------
 
 createFrame :: String -> Druid Frame

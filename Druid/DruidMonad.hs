@@ -52,7 +52,8 @@ instance Show DruidData where
            let sCreateOps = "Create op counts: " ++ (show . length $ createOps r) in
            let sUpdateOps = "Update op counts: " ++ (show . length $ updateOps r) in
            let sRemoveOps = "Remove op counts: " ++ (show . length $ removeOps r) in
-           "{ " ++ intercalate ", " [sWidgets, sMaxId, sCreateOps, sUpdateOps, sRemoveOps] ++ " }"
+           let sLastTimeStep = "Last time step: " ++ (show $ timeStep r) in
+           "{ " ++ intercalate ", " [sWidgets, sMaxId, sLastTimeStep, sCreateOps, sUpdateOps, sRemoveOps] ++ " }" 
 
  
 type Druid = StateT DruidData IO
@@ -60,11 +61,17 @@ type Druid = StateT DruidData IO
 initializeDruidData :: IO DruidData
 initializeDruidData = do
   ref <- newIORef Nothing
-  return $ DruidData { widgets = [], maxId = 1, createOps = [], updateOps = [], removeOps = [], stepperData = ref}
+  return $ DruidData { widgets = [], maxId = 1, timeStep = 0, createOps = [], updateOps = [], removeOps = [], stepperData = ref}
 
 getNextId :: Druid Integer
 getNextId = get >>= \r@DruidData { maxId = id } -> put r { maxId = id + 1 } >> return id
   
+getTimeStep :: Druid Double
+getTimeStep = get >>= \r -> return $ timeStep r
+
+putTimeStep :: Double -> Druid ()
+putTimeStep time = get >>= \r -> put r { timeStep = time }
+
 addCreateOp :: Druid () -> Druid ()
 addCreateOp op = get >>= \r@DruidData { createOps = ops } -> put r { createOps = ops ++ [op] }
 
@@ -94,6 +101,11 @@ getWXWidget id = do
     Nothing        -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
     Just (_, w)    -> return w
   
+runDruid :: Druid a -> DruidData -> IO (a, DruidData)
+runDruid druidOp state = runStateT druidOp state
+
+execDruid :: Druid () -> DruidData -> IO DruidData
+execDruid druidOp state = execStateT druidOp state
 
 doOps :: Druid ()
 doOps = do

@@ -237,10 +237,16 @@ clock duration = f Nothing where
 
 stepBehavior :: Behavior (Druid ()) -> UIEvent -> Druid (Behavior (Druid ()))
 stepBehavior (Behavior beh) event = do
+  -- Get the current time value
   utcTime <- liftIO getCurrentTime
   let time = realToFrac $ utctDayTime utcTime :: Double
+  -- Perform any pending actions from previous step
+  lastStep <- getTimeStep
+  if lastStep < time then do doOps else return ()
+  -- "Age" the behavior and make sure the side effects execute
   (beh', op) <- beh (time, Just event)
   op
+  -- Return the new behavior
   return beh'
 
 handleEvent :: StepperData -> UIEvent -> IO ()
@@ -249,21 +255,17 @@ handleEvent stepperData event = do
   case dta of 
     Nothing -> error "Internal error: stepperData should not be NULL inside handleEvent"
     Just (state, beh) -> do
-      (beh', state') <- runStateT (stepBehavior beh event) state
+      (beh', state') <- runDruid (stepBehavior beh event) state
       writeIORef stepperData (Just (state', beh'))
 
-runDruid :: Druid a -> DruidData -> IO (a, DruidData)
-runDruid druidOp state = runStateT druidOp state
 
-runDruid_ :: Druid () -> DruidData -> IO DruidData
-runDruid_ druidOp state = runDruid druidOp state >>= return . snd
-
-start :: Maybe (Druid ()) -> Behavior (Druid ()) -> IO ()
-start init behavior = do
+startEngine :: Maybe (Druid ()) -> Behavior (Druid ()) -> IO ()
+startEngine init behavior = do
   druidData <- initializeDruidData -- behavior
   case init of
     Just d -> do
-      druidData' <- runDruid_ d druidData
+      -- Run the initialization code in the druid monad and reify ops immediately
+      druidData' <- execDruid d druidData >>= execDruid doOps
       writeIORef (stepperData druidData') $ Just (druidData', behavior)
     Nothing -> writeIORef (stepperData druidData) $ Just (druidData, behavior)
       

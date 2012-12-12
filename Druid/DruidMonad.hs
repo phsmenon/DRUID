@@ -37,7 +37,9 @@ data WXWidget =
 
 data WXWindow = forall a. WXWindow (WX.Window a)
   
-type WidgetDelegatePair = (Integer, WXWidget)
+type Tag = String
+
+type WidgetDelegatePair = (Maybe Tag, (Integer, WXWidget))
 
 data UIEvent = 
   Heartbeat 
@@ -100,15 +102,16 @@ clearRemoveOps :: Druid ()
 clearRemoveOps = get >>= \r -> put r { removeOps = [] }
 
 stoveDelegate :: Integer -> WXWidget -> Druid ()
-stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> put r { widgets = (id,widget):lst }
+stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> 
+    put r { widgets = (Nothing, (id,widget)):lst }
 
 getWXWidget :: Integer -> Druid WXWidget 
 getWXWidget id = do 
   r@DruidData { widgets = wlist } <- get
-  let res = find (\(id', w) -> id' == id) wlist
+  let res = find (\w -> (fst $ snd w) == id) wlist
   case res of 
-    Nothing        -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
-    Just (_, w)    -> return w
+    Nothing          -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
+    Just (_, (_, w)) -> return w
 
 getWXWindow :: Integer -> Druid WXWindow 
 getWXWindow id = do

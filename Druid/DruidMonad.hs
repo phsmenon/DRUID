@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ExistentialQuantification #-}
 
 module Druid.DruidMonad where
 
@@ -34,6 +34,8 @@ data WXWidget =
     WXFrame (WX.Frame ())
   | WXButton (WX.Button ())
   | WXLabel (WX.StaticText ())
+
+data WXWindow = forall a. WXWindow (WX.Window a)
   
 type WidgetDelegatePair = (Integer, WXWidget)
 
@@ -107,6 +109,14 @@ getWXWidget id = do
   case res of 
     Nothing        -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
     Just (_, w)    -> return w
+
+getWXWindow :: Integer -> Druid WXWindow 
+getWXWindow id = do
+  widget <- getWXWidget id
+  return $ case widget of
+             WXFrame w -> WXWindow w
+             WXLabel w -> WXWindow w
+             WXButton w -> WXWindow w
   
 runDruid :: Druid a -> DruidData -> IO (a, DruidData)
 runDruid druidOp state = runStateT druidOp state

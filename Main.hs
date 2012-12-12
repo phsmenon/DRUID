@@ -23,7 +23,7 @@ initialGui = do
   f <- createFrame "Foo Bar"
   l <- createLabel f "Text"
   b <- createButton f "Press Me"
-  setButtonProperty b [WX.position := WX.point 50 50]
+  setProperties b [WX.position := WX.point 50 50]
   fn f l b 
   where
     fn :: Frame -> Label -> Button -> Druid(Behavior (Druid ()))
@@ -36,9 +36,9 @@ initialGui = do
     newLabel :: Frame -> Integer -> Integer -> String -> Druid ()
     newLabel f x y txt = do 
       l <- createLabel f txt
-      setLabelProperty l [WX.position := WX.point (fromIntegral x) (fromIntegral y)]
+      setProperties l [WX.position := WX.point (fromIntegral x) (fromIntegral y)]
     propSet :: Label -> String -> Druid ()
-    propSet l str = setLabelProperty l [WX.text := str]
+    propSet l str = setProperties l [WX.text := str]
   
 
 main :: IO ()

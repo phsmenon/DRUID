@@ -17,14 +17,17 @@ data Label = Label Integer
 
 ---------------------------------------------------------------
 
-class Widget w where
+class (Property w ~ Prop (Delegate w)) => Widget w where
   type Delegate w :: *
   type Property w :: *
   getId :: w -> Integer
   getDelegate :: w -> Druid(Delegate w)
-  --setProperty w -> Property -> Druid ()
+  setProperties :: w -> [Property w] -> Druid ()
 
-class (Widget w) => CommandEventSource w where
+class Widget w => Container w where
+  getDelegateContainer :: w -> Druid(Delegate w)
+
+class Widget w => CommandEventSource w where
   registerCommandListener :: w -> (UIEvent -> IO ()) -> Druid ()
 
 ---------------------------------------------------------------
@@ -46,15 +49,21 @@ createControlWidget id parent delegate wrapper = do
   w <- liftIO $ delegate parentWindow
   stoveDelegate id (wrapper w)  
 
-setWidgetProperty :: Integer -> (Integer -> Druid w) -> [Prop w] -> Druid ()  
-setWidgetProperty id lookup properties = do
-  w <- lookup id
-  liftIO $ WX.set w properties
+createControl :: (Widget w, Container c) => w -> c -> (Delegate c -> IO WXWidget) -> Druid ()
+createControl w parent constructor = do
+  parentDelegate <- getDelegateContainer parent
+  wxObj <- liftIO $ constructor parentDelegate
+  stoveDelegate (getId w) wxObj
 
-{-setProp :: Widget w => w -> [Property w] -> Druid ()-}
-{-setProp widget props = do-}
-  {-wxObj <- getWXWidget $ getId widget-}
-  {-liftIO $ WX.set wxObj props-}
+{-setWidgetProperty :: Integer -> (Integer -> Druid w) -> [Prop w] -> Druid ()  -}
+{-setWidgetProperty id lookup properties = do-}
+  {-w <- lookup id-}
+  {-liftIO $ WX.set w properties-}
+
+setWidgetProperties :: Widget w => w -> [Property w] -> Druid ()
+setWidgetProperties widget props = do
+  wxObj <- getDelegate widget
+  liftIO $ WX.set wxObj props
 
 -------------------------------------------------------------------------
 
@@ -69,15 +78,16 @@ getWXFrame id = do
   WXFrame w <- getWXWidget id
   return w
 
-setFrameProperty :: Frame -> [Prop (WX.Frame ())] -> Druid ()
-setFrameProperty (Frame id) props = addUpdateOp $ setWidgetProperty id getWXFrame props
 
 instance Widget Frame where
   type Delegate Frame = WX.Frame ()
   type Property Frame = Prop (WX.Frame ())
   getId (Frame id) = id
   getDelegate (Frame id) = getWXWidget id >>= \(WXFrame w) -> return w
-  -- setProperty w property = addUpdateOp $ setWidget
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+
+instance Container Frame where
+  getDelegateContainer = getDelegate
 
 ---------------------------------------------------------------  
 
@@ -86,20 +96,24 @@ createLabel (Frame parent) text = do
   id <- getNextId
   addCreateOp $ createControlWidget id parent (\w -> WX.staticText w [WX.text := text]) WXLabel
   return $ Label id
+
+{-createLabelEx :: Container c => c -> [Property Label] -> Druid Label-}
+{-createLabelEx parent props = do-}
+  {-id <- getNextId-}
+  {-addCreateOp $ createControl (Frame id) parent (\c -> WX.staticText c props >>= return.WXLabel)-}
+  {-return $ Label id-}
   
 getWXLabel :: Integer -> Druid (WX.StaticText ())
 getWXLabel id = do
   WXLabel w <- getWXWidget id
   return w
   
-setLabelProperty :: Label -> [Prop (WX.StaticText ())] -> Druid ()
-setLabelProperty (Label id) props = addUpdateOp $ setWidgetProperty id getWXLabel props
-  
 instance Widget Label where
   type Delegate Label = WX.StaticText ()
   type Property Label = Prop (WX.StaticText ())
-  getDelegate (Label id) = getWXWidget id >>= \(WXLabel w) -> return w
   getId (Label id) = id
+  getDelegate (Label id) = getWXWidget id >>= \(WXLabel w) -> return w
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
 
 ---------------------------------------------------------------  
   
@@ -107,7 +121,6 @@ createButton :: Frame -> String -> Druid Button
 createButton (Frame parent) text = do
   id <- getNextId
   addCreateOp $ createControlWidget id parent (\w -> WX.button w [WX.text := text]) WXButton
-  -- Very rough
   return $ Button id
   
 getWXButton :: Integer -> Druid (WX.Button ())
@@ -115,14 +128,12 @@ getWXButton id = do
   WXButton w <- getWXWidget id
   return w
     
-setButtonProperty :: Button -> [Prop (WX.Button ())] -> Druid ()
-setButtonProperty (Button id) props = addUpdateOp $ setWidgetProperty id getWXButton props
-
 instance Widget Button where
   type Delegate Button = WX.Button ()
   type Property Button = Prop (WX.Button ())
   getId (Button id) = id
   getDelegate (Button id) = getWXWidget id >>= \(WXButton w) -> return w
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
 
 instance CommandEventSource Button where
   registerCommandListener (Button id) handler = deferRegisterEventHandler id getWXButton WX.command (handler $ Command id)

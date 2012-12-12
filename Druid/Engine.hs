@@ -10,6 +10,7 @@ import Data.Time.Clock
 
 import Druid.Types
 import Druid.DruidMonad
+import Druid.Controls (createInternalTimer)
 
 -----------------------------------------------------------------
 -- Some Type Abbreviations
@@ -269,10 +270,7 @@ startEngine :: Druid(Behavior (Druid ())) -> IO ()
 startEngine behavior = do
   druidData <- initializeDruidData -- behavior
   -- Get the behavior out of the monad and reify changes immediately
-  (beh', druidData') <- runDruid (behavior <* doOps) druidData 
+  let timerAction = standardEventReceiver >>= (createInternalTimer 100)
+  (beh', druidData') <- runDruid (behavior <* doOps <* timerAction) druidData 
   writeIORef (stepperDataRef druidData') $ Just (druidData', beh')
   
-      
-      
-
-    

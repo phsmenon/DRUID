@@ -37,7 +37,9 @@ data WXWidget =
   
 type WidgetDelegatePair = (Integer, WXWidget)
 
-data UIEvent = Command Integer
+data UIEvent = 
+  Heartbeat 
+  | Command Integer
   deriving (Eq, Show)
 
 data DruidData = DruidData { 
@@ -116,7 +118,7 @@ doOps :: Druid ()
 doOps = do
   DruidData { createOps = cOps, updateOps = uOps, removeOps = rOps } <- get
   -- get >>= \x -> liftIO $ traceIO (show x)
-  liftIO $ traceIO ("To create: " ++ (show $ length $ cOps ++ uOps ++ rOps))
+  -- liftIO $ traceIO ("To create: " ++ (show $ length $ cOps ++ uOps ++ rOps))
   sequence_ $ cOps ++ uOps ++ rOps
   clearCreateOps >> clearUpdateOps >> clearRemoveOps
   -- get >>= \x -> liftIO $ traceIO (show x)

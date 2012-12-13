@@ -128,13 +128,13 @@ deferRegisterEventHandler id lookup event handler = do
 createTopLevelWidget :: Integer -> IO a -> (a -> WXWidget) -> Druid ()
 createTopLevelWidget id delegate wrapper = addCreateOp $ do
   w <- liftIO delegate
-  stoveDelegate id (wrapper w)
+  storeDelegate id (wrapper w)
   
 createControlWidget :: Integer -> Integer -> (forall b. WX.Window b -> IO a) -> (a -> WXWidget) -> Druid ()
 createControlWidget id parent delegate wrapper = addCreateOp $ do
   WXWindow w <- getWXWindow parent
   w <- liftIO $ delegate w
-  stoveDelegate id (wrapper w)  
+  storeDelegate id (wrapper w)  
 
 setWidgetProperties :: Widget w => w -> [Property w] -> Druid ()
 setWidgetProperties widget props = do

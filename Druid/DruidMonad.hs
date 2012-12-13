@@ -101,12 +101,12 @@ clearUpdateOps = get >>= \r -> put r { updateOps = [] }
 clearRemoveOps :: Druid ()
 clearRemoveOps = get >>= \r -> put r { removeOps = [] }
 
-stoveDelegate :: Integer -> WXWidget -> Druid ()
-stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> 
+storeDelegate :: Integer -> WXWidget -> Druid ()
+storeDelegate id widget = get >>= \r@DruidData { widgets = lst } -> 
     put r { widgets = (Nothing, (id,widget)):lst }
 
-stoveDelegateTag :: Tag -> Integer -> WXWidget -> Druid ()
-stoveDelegateTag tag id widget = get >>= \r@DruidData { widgets = lst } -> 
+storeDelegateTag :: Tag -> Integer -> WXWidget -> Druid ()
+storeDelegateTag tag id widget = get >>= \r@DruidData { widgets = lst } -> 
     put r { widgets = (Just tag, (id,widget)):lst }
 
 getWXWidget :: Integer -> Druid WXWidget 

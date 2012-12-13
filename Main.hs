@@ -35,9 +35,9 @@ guiA = do
 guiAnimatingButton :: Druid(Behavior (Druid ()))
 guiAnimatingButton = do
   f <- createFrame [text := "Escaping Button", on closing := exitSuccess]
-  b <- createButton f [text := "Press Me"]
+  b <- createButton f [text := "Help Me"]
   setProperties f [size := sz 300 200]
-  setProperties b [position := point 50 500, size := sz 80 10]
+  setProperties b [position := point 50 500, size := sz 120 10]
   makeBehavior f b
   where
     makeBehavior :: Frame -> Button -> Druid(Behavior (Druid ()))

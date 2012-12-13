@@ -24,7 +24,7 @@ lift3 = liftM4 E.lift3
 choose = liftM3 E.choose
 accum = liftM2 E.accum
 
-integral :: Vec a => Druid (Behavior a) -> Druid (Behavior a)
+integral :: E.Vec a => Druid (Behavior a) -> Druid (Behavior a)
 integral = liftM E.integral
 
 never = return E.never

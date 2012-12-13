@@ -12,6 +12,7 @@ import qualified Graphics.UI.WX as WX
 
 import Control.Monad
 import System.Exit
+import System.Environment(getArgs)
 
 guiA :: Druid(Behavior (Druid ()))
 guiA = do
@@ -61,4 +62,8 @@ guiA = do
   
 main :: IO ()
 main = do
-  start $ startEngine guiA
+  args <- getArgs
+  case args of
+    []    -> start $ startEngine guiA
+    "a":_ -> start $ startEngine guiA
+    _     -> start $ startEngine guiA

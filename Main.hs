@@ -47,6 +47,7 @@ guiAnimatingButton = do
           beh = switch ((p2 50 50) |-> (b, position)) 
                   (event -=> return (x |-> (b, position) $$ 
                     (lift0 "Later Sucker" |-> (b, text))))
+      return beh
 
 guiC :: Druid(Behavior (Druid ()))
 guiC = do

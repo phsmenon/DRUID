@@ -86,6 +86,10 @@ guiD = do
     randomButtonBehavior f b = do
       event <- onCommand b
       return $ hold empty (event -=> f ==> buildButtons)
+      let ev = event -=> after (buildButtons f) (lift0 empty)
+      return $ (lift0 empty) `switch` ev 
+      -- let beh = (event -=> (liftM1 (seq $ buildButtons f))) beh
+      -- lift0 empty `switch` beh
     buildButtons :: Frame -> Druid ()
     buildButtons f = do 
       (x1, y1) <- randomPoints
@@ -100,6 +104,9 @@ guiD = do
       return $ (x, y)
     empty :: Druid ()
     empty = return ()
+    after :: Druid () -> a -> Druid a
+    after io v = do io
+                    return v
     
 
 main :: IO ()

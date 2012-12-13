@@ -31,6 +31,22 @@ guiA = do
       let beh' = lift1 show beh |-> (l, text)
       return beh'
 
+-- Animating button
+guiAnimatingButton :: Druid(Behavior (Druid ()))
+guiAnimatingButton = do
+  f <- createFrame [text := "Escaping Button", on closing := exitSuccess]
+  b <- createButton f [text := "Press Me"]
+  setProperties f [size := sz 300 200]
+  setProperties b [position := point 50 500, size := sz 80 10]
+  makeBehavior f b
+  where
+    makeBehavior :: Frame -> Button -> Druid(Behavior (Druid ()))
+    makeBehavior f b = do
+      event <- onCommand b
+      let x = (p2 50 50) + integral (p2 50 0)
+      let beh = x |-> (b, position)
+      return beh
+
 {-guiB :: Druid(Behavior (Druid ()))-}
 {-guiB = do-}
   {-f <- createFrame [text := "Timing", on closing := exitSuccess]-}
@@ -66,4 +82,5 @@ main = do
   case args of
     []    -> start $ startEngine guiA
     "a":_ -> start $ startEngine guiA
+    "b":_ -> start $ startEngine guiAnimatingButton
     _     -> start $ startEngine guiA

@@ -1,3 +1,4 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 module Druid.Engine where
 
 import Data.Maybe
@@ -11,6 +12,7 @@ import Data.Time.Clock
 import Druid.Types
 import Druid.DruidMonad
 import Druid.Controls (createInternalTimer)
+import qualified Graphics.UI.WX as WX
 
 -----------------------------------------------------------------
 -- Some Type Abbreviations
@@ -110,12 +112,22 @@ hold v0 (Event a0) = f v0 a0
 -- Behavior Combinators
 -----------------------------------------------------------------
 
+{-integral :: Vec a => Behavior a -> Behavior a-}
+{--- Create a progressively increasing (reactive) value-}
+{-integral (Behavior a) = f a (0, 0) where-}
+  {-f a (pt, pv) = Behavior $ \s@(t, ev) -> do (Behavior a', av) <- a s-}
+                                             {-let val = pv + (t - pt) *^ av-}
+                                             {-return (f a' (t, val), val)-}
+
 integral :: Vec a => Behavior a -> Behavior a
--- Create a progressively increasing (reactive) value
-integral (Behavior a) = f a (0, 0) where
-  f a (pt, pv) = Behavior $ \s@(t, ev) -> do (Behavior a', av) <- a s
-                                             let val = pv + (t - pt) *^ av
-                                             return (f a' (t, val), val)
+integral b = Behavior $ \s@(t, _) ->
+    let Behavior b' = inner b 0 t
+    in b' s
+
+inner (Behavior b) sum tlast = Behavior $ \s@(t, _) -> do
+    (b', new) <- b s
+    let sum' = sum + ((t - tlast) *^ new)
+    return (inner b' sum' t, sum')
 
 -----------------------------------------------------------------
 -- Event Constructors
@@ -272,3 +284,48 @@ startEngine behavior = do
   (beh', druidData') <- runDruid (behavior <* doOps <* timerAction) druidData 
   writeIORef (stepperDataRef druidData') $ Just (druidData', beh')
   
+---------------------------------------------------------------
+
+-- Make most methods in Num reactive
+
+instance Num a => Num (Behavior a) where
+  (+)           = lift2 (+)
+  (-)           = lift2 (-)
+  (*)           = lift2 (*)
+  abs           = lift1 abs
+  negate        = lift1 negate
+  fromInteger i = lift0 (fromInteger i)
+  signum        = error "Cant use signum on behaviors"
+  
+-- Make methods in Fractional reactive
+
+instance Fractional a => Fractional (Behavior a)
+  where
+    (/) = lift2 (/)
+    fromRational r = lift0 (fromRational r)
+
+-- This class represents values that can be scaled
+--
+instance Num (WX.Point) where
+   WX.Point x1 y1 + WX.Point x2 y2  = WX.Point (x1+x2) (y1+y2)
+   WX.Point x1 y1 - WX.Point x2 y2  = WX.Point (x1-x2) (y1-y2)
+   negate (WX.Point x y)      = WX.Point (-x) (-y)
+   (*)                  = error "No * method for WX.Point"
+   abs                  = error "No abs method for WX.Point"
+   signum               = error "No * method for WX.Point"
+   fromInteger 0        = WX.Point 0 0
+   fromInteger _        = error "Only the constant 0 can be used as a WX.Point"
+
+class Num a => Vec a where
+  (*^) :: Double -> a -> a
+
+instance Vec Double where
+  (*^) = (*)
+
+instance Vec WX.Point where
+  d *^ (WX.Point x y) = WX.Point (round $ d*x') (round $ d*y')
+    where x' = fromIntegral x
+          y' = fromIntegral y
+
+p2 :: Behavior Int -> Behavior Int -> Behavior (WX.Point)
+p2 = lift2 WX.point

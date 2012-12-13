@@ -5,6 +5,23 @@ import Druid.Types
 import Druid.DruidMonad
 import Druid.Controls
 
+import qualified Graphics.UI.WX as WX  hiding ((:=))
+import Graphics.UI.WX(Prop((:=)))
+
+---------------------------------------------------------------------
+-- Reactive UI combinators
+---------------------------------------------------------------------
+
+($$) :: Behavior (Druid ()) -> Behavior (Druid ()) -> Behavior (Druid ())
+($$) = lift2 (>>)
+
+(|->) :: Widget w => Behavior a -> (w, Attribute w a) -> Behavior (Druid ())
+(|->) behavior (w, attr) = lift1 (\v -> setProperty w (attr := v)) behavior
+
+---------------------------------------------------------------------
+-- Reactive UI specific Events
+---------------------------------------------------------------------
+
 onCommand :: CommandEventSource widget => widget -> Druid (Event ())
 onCommand widget = do
   listener <- standardEventReceiver

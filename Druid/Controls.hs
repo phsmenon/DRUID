@@ -105,6 +105,27 @@ createButton parent props = do
   return $ Button id
 
 ---------------------------------------------------------------
+-- Panel
+---------------------------------------------------------------
+
+data Panel = Panel Integer
+
+instance Widget Panel where
+  type Delegate Panel = WX.Panel ()
+  type Attribute Panel = WX.Attr (WX.Panel ())
+  type Property Panel = Prop (WX.Panel ())
+  getId (Panel id) = id
+  getDelegate (Panel id) = getWXWidget id >>= \(WXPanel w) -> return w
+  getProperty = getWidgetProperty
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+
+createPanel :: Container c => c -> [Property Panel] -> Druid Panel
+createPanel parent props = do
+  id <- getNextId
+  createControlWidget id (getId parent) (\w -> WX.panel w props) WXPanel
+  return $ Panel id
+
+---------------------------------------------------------------
 -- Internal Timer
 ---------------------------------------------------------------
   

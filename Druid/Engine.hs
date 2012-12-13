@@ -216,8 +216,6 @@ accum init a = f a init where
 ------------------------------------------------------
 
 time :: BD
--- Make the time value that comes as part of the stimulus in to
--- a behavior
 time = f where
    f = Behavior (\(t, _) -> return (f, t))
 

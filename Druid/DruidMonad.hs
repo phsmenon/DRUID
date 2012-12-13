@@ -34,6 +34,7 @@ data WXWidget =
     WXFrame (WX.Frame ())
   | WXButton (WX.Button ())
   | WXLabel (WX.StaticText ())
+  | WXPanel (WX.Panel ())
 
 data WXWindow = forall a. WXWindow (WX.Window a)
   
@@ -132,6 +133,7 @@ getWXWindow id = do
              WXFrame w -> WXWindow w
              WXLabel w -> WXWindow w
              WXButton w -> WXWindow w
+             WXPanel w -> WXWindow w
   
 runDruid :: Druid a -> DruidData -> IO (a, DruidData)
 runDruid druidOp state = runStateT druidOp state

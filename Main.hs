@@ -47,9 +47,28 @@ guiAnimatingButton = do
           beh = switch ((p2 50 50) |-> (b, position)) (event -=> return (x |-> (b, position)))
       return beh
 
+guiC :: Druid(Behavior (Druid ()))
+guiC = do
+  f <- createFrame [text := "Timing", on closing := exitSuccess]
+  l <- createLabel f [text := "Count"]
+  s <- createSpin f 1 5 []
+  setProperties f [size := sz 150 50]
+  setProperties s [position := point 0 30]
+  setProperties l [fontSize := 20]
+  makeBehavior f l s
+  where
+    makeBehavior :: Frame -> Label -> Spin -> Druid(Behavior (Druid ()))
+    makeBehavior f l s = do
+      spinEvent <- EM.snap (onSelect s) (return $ s |@@| selection) 
+      let behavior = eventCounter (clock 1) `switch` resettableClockCounter spinEvent
+      return $ behavior |||-> (l, text)
+    makeClock :: Double -> Druid (Event ())
+    makeClock val = return $ traceEX "Tick" (clock val)
+    eventCounter :: Event a -> Behavior (Druid Integer)
+    eventCounter e = accum (return 0) (e -=> (liftM (1 +)))
+    resettableClockCounter :: Event Int -> Event (Druid (Behavior (Druid Integer)))
+    resettableClockCounter switch = switch ==> (\v -> makeClock (fromIntegral v :: Double) >>= \c -> return $ eventCounter c)
 
-
-  
 main :: IO ()
 main = do
   args <- getArgs
@@ -57,4 +76,5 @@ main = do
     []    -> start $ startEngine guiA
     "a":_ -> start $ startEngine guiA
     "b":_ -> start $ startEngine guiAnimatingButton
+    "c":_ -> start $ startEngine guiC
     _     -> start $ startEngine guiA

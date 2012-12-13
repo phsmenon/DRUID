@@ -35,6 +35,12 @@ lift1 fn (Behavior a0) = f a0 where
   f a = Behavior $ \s -> do (Behavior a', av) <- a s 
                             return (f a', fn av)
 
+liftM1 :: (a -> Druid b) -> Behavior a -> Behavior b
+liftM1 fn (Behavior a0) = f a0 where
+  f a = Behavior $ \s -> do (Behavior a', av) <- a s 
+                            val <- fn av
+                            return (f a', val)
+
 lift2 :: (a -> b -> c) -> Behavior a -> Behavior b -> Behavior c
 lift2 fn (Behavior a0) (Behavior b0) = f a0 b0
   where f a b = Behavior $ \s -> do (Behavior a', av) <- a s

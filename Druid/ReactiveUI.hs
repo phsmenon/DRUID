@@ -1,6 +1,7 @@
 module Druid.ReactiveUI where
 
 import Druid.Engine
+import qualified Druid.Engine as EM
 import Druid.Types
 import Druid.DruidMonad
 import Druid.Controls
@@ -26,6 +27,9 @@ import Graphics.UI.WX(Prop((:=)))
 
 (@@) :: Widget w => w -> Attribute w a -> Behavior (Druid a)
 (@@) w attr = lift1 (uncurry getProperty) (lift0 (w, attr))
+
+(|@@|) :: Widget w => w -> Attribute w a -> Behavior a
+(|@@|) w attr = liftM1 (uncurry getProperty) (lift0 (w,attr))
 
 ---------------------------------------------------------------------
 -- Reactive UI specific Events

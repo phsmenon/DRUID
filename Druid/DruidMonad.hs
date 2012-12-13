@@ -105,13 +105,25 @@ stoveDelegate :: Integer -> WXWidget -> Druid ()
 stoveDelegate id widget = get >>= \r@DruidData { widgets = lst } -> 
     put r { widgets = (Nothing, (id,widget)):lst }
 
+stoveDelegateTag :: Tag -> Integer -> WXWidget -> Druid ()
+stoveDelegateTag tag id widget = get >>= \r@DruidData { widgets = lst } -> 
+    put r { widgets = (Just tag, (id,widget)):lst }
+
 getWXWidget :: Integer -> Druid WXWidget 
 getWXWidget id = do 
   r@DruidData { widgets = wlist } <- get
   let res = find (\w -> (fst $ snd w) == id) wlist
   case res of 
-    Nothing          -> traceStack "" $ error ("Object with id " ++ show id ++  " not in list.")
+    Nothing          -> traceStack "" $ error ("Object with id " ++ show id ++ " not in list.")
     Just (_, (_, w)) -> return w
+
+getWidgetsByTag :: Tag -> Druid [WXWidget]
+getWidgetsByTag tag = do
+  r@DruidData { widgets = wlist } <- get
+  let res = map (\w -> snd . snd $ w) $ filter (\w -> maybe False (== tag) $ fst w) wlist
+  case res of 
+    [] -> traceStack "" $ error ("Objects with tag " ++ show tag ++ " not in list.")
+    xs -> return xs
 
 getWXWindow :: Integer -> Druid WXWindow 
 getWXWindow id = do

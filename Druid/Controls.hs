@@ -23,6 +23,7 @@ class (Property w ~ Prop (Delegate w), Attribute w ~ Attr (Delegate w)) => Widge
   setProperties :: w -> [Property w] -> Druid ()
   setProperty :: w -> Property w -> Druid ()
   setProperty w prop = setProperties w [prop]
+  remove :: w -> Druid ()
 
 class Widget w => Container w where
   getDelegateContainer :: w -> Druid(Delegate w)
@@ -47,6 +48,7 @@ instance Widget Frame where
   getDelegate (Frame id) = getWXWidget id >>= \(WXFrame w) -> return w
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 instance Container Frame where
   getDelegateContainer = getDelegate
@@ -71,6 +73,8 @@ instance Widget Label where
   getDelegate (Label id) = getWXWidget id >>= \(WXLabel w) -> return w
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+
 
 createLabel :: Container c => c -> [Property Label] -> Druid Label
 createLabel parent props = do
@@ -92,6 +96,7 @@ instance Widget Button where
   getDelegate (Button id) = getWXWidget id >>= \(WXButton w) -> return w
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 getButtonDelegate :: Integer -> Druid (Delegate Button)
 getButtonDelegate id = getWXWidget id >>= \(WXButton w) -> return w
@@ -121,6 +126,7 @@ instance Widget Panel where
   getDelegate (Panel id) = getWXWidget id >>= \(WXPanel w) -> return w
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 createPanel :: Container c => c -> [Property Panel] -> Druid Panel
 createPanel parent props = do
@@ -142,6 +148,7 @@ instance Widget Spin where
   getDelegate (Spin id) = getWXWidget id >>= \(WXSpin w) -> return w
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 createSpin :: Container c => c -> Integer -> Integer -> [Property Spin] -> Druid Spin
 createSpin parent min max props = do

@@ -11,8 +11,11 @@ import Graphics.UI.WX hiding (Button, Frame, Panel, Widget, Event)
 import qualified Graphics.UI.WX as WX
 
 import Control.Monad
+import Control.Monad.IO.Class
 import System.Exit
 import System.Environment(getArgs)
+
+import System.Random
 
 guiA :: Druid(Behavior (Druid ()))
 guiA = do
@@ -71,6 +74,34 @@ guiC = do
     resettableClockCounter :: Event Int -> Event (Druid (Behavior (Druid Integer)))
     resettableClockCounter switch = switch ==> (\v -> makeClock (fromIntegral v :: Double) >>= \c -> return $ eventCounter c)
 
+guiD :: Druid(Behavior (Druid ()))
+guiD = do
+  f <- createFrame [text := "Click", size := sz 400 400, on closing := exitSuccess]
+  b <- createButton f [text := "Press", size := sz 30 30]
+  randomButtonBehavior f b
+  -- return $ lift0 empty
+  where
+    randomButtonBehavior :: Frame -> Button -> Druid (Behavior (Druid ()))
+    randomButtonBehavior f b = do
+      event <- onCommand b
+      return $ hold empty (event -=> f ==> buildButtons)
+    buildButtons :: Frame -> Druid ()
+    buildButtons f = do 
+      (x1, y1) <- randomPoints
+      (x2, y2) <- randomPoints
+      b1 <- createButton f [text := "New-1", position := point x1 y1]
+      b2 <- createButton f [text := "New-2", position := point x2 y2]
+      return ()
+    randomPoints :: Druid (Int, Int)
+    randomPoints = do
+      x <- liftIO $ randomRIO (300, 300)
+      y <- liftIO $ randomRIO (300, 300)
+      return $ (x, y)
+    empty :: Druid ()
+    empty = return ()
+      
+    
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -79,4 +110,5 @@ main = do
     "a":_ -> start $ startEngine guiA
     "b":_ -> start $ startEngine guiAnimatingButton
     "c":_ -> start $ startEngine guiC
+    "d":_ -> start $ startEngine guiD
     _     -> start $ startEngine guiA

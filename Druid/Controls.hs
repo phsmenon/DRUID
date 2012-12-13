@@ -30,6 +30,9 @@ class Widget w => Container w where
 class Widget w => CommandEventSource w where
   registerCommandListener :: w -> (UIEvent -> IO ()) -> Druid ()
 
+class Widget w => SelectEventSource w where
+  registerSelectListener :: w -> (UIEvent -> IO ()) -> Druid ()
+
 ---------------------------------------------------------------
 -- Frame
 ---------------------------------------------------------------
@@ -124,6 +127,36 @@ createPanel parent props = do
   id <- getNextId
   createControlWidget id (getId parent) (\w -> WX.panel w props) WXPanel
   return $ Panel id
+  
+---------------------------------------------------------------
+-- Spin Control
+---------------------------------------------------------------
+
+data Spin = Spin Integer
+
+instance Widget Spin where
+  type Delegate Spin = WX.SpinCtrl ()
+  type Attribute Spin = WX.Attr (WX.SpinCtrl ())
+  type Property Spin = Prop (WX.SpinCtrl ())
+  getId (Spin id) = id
+  getDelegate (Spin id) = getWXWidget id >>= \(WXSpin w) -> return w
+  getProperty = getWidgetProperty
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+
+createSpin :: Container c => c -> Integer -> Integer -> [Property Spin] -> Druid Spin
+createSpin parent min max props = do
+  id <- getNextId
+  let (iMin, iMax) = (fromIntegral min, fromIntegral max)
+  createControlWidget id (getId parent) (\w -> WX.spinCtrl w iMin iMax props) WXSpin
+  return $ Spin id  
+
+getSpinDelegate :: Integer -> Druid (Delegate Spin)
+getSpinDelegate id = getWXWidget id >>= \(WXSpin w) -> return w
+
+
+instance SelectEventSource Spin where
+  registerSelectListener (Spin id) handler = 
+    deferRegisterEventHandler id getSpinDelegate WX.select (handler $ Select id)
 
 ---------------------------------------------------------------
 -- Internal Timer

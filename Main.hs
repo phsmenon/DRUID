@@ -1,50 +1,64 @@
 module Main where
 
 import Druid.DruidMonad
-import Druid.EngineM
+import Druid.Engine
+import qualified Druid.EngineM as EM
 import Druid.Controls
 
-import qualified Druid.ReactiveUI as RUI
+import Druid.ReactiveUI
 
-import qualified Graphics.UI.WX as WX  hiding ((:=))
-import Graphics.UI.WX(Prop((:=)))
+import Graphics.UI.WX hiding (Button, Frame, Panel, Widget, Event)
+import qualified Graphics.UI.WX as WX
 
 import Control.Monad
 import System.Exit
 
-showB :: Show a => Druid a -> Druid String
-showB = liftM show
-
-
-initialGui :: Druid(Behavior (Druid ()))
-initialGui = do
-  f <- createFrame [WX.text := "Foo Bar", WX.on WX.closing := exitSuccess]
-  l <- createLabel f [WX.text := "Text"]
-  b1 <- createButton f [WX.text := "Press Me"]
-  setProperties b1 [WX.position := WX.point 50 50]
-  fn f l b1
+guiA :: Druid(Behavior (Druid ()))
+guiA = do
+  f <- createFrame [text := "Click Count", on closing := exitSuccess]
+  l <- createLabel f [text := "Count"]
+  b <- createButton f [text := "Press Me"]
+  setProperties f [size := sz 150 50]
+  setProperties l [fontSize := 20]
+  setProperties b [position := point 50 0]
+  makeBehavior f l b
   where
-    fn :: Frame -> Label -> Button -> Druid(Behavior (Druid ()))
-    fn f l b = do beh <- accum (return 0) (RUI.onCommand b -=> return (10 +)) 
-                  -- lift1 showB beh -- |-> return (l, WX.text)
-                  -- lift0 (setProperty l (WX.text := "Foo"))
-                  {-lift1 (return (\val -> propSet l (show val))) (return beh)-}
-                  lift1 (return (\val -> setProperty l (WX.text := show val))) (return beh)
-    {-fn f l b = do event <- onCommand b-}
-                  {-let beh = accum (0::Integer) (event -=> (25 +))-}
-                {--- return $ lift1 (\val -> propSet l val) beh-}
-                  {-return $ lift1 (\val -> newLabel f val val (show val)) beh-}
-    newLabel :: Frame -> Integer -> Integer -> String -> Druid ()
-    newLabel f x y txt = do 
-      l <- createLabel f [WX.text := txt]
-      setProperties l [WX.position := WX.point (fromIntegral x) (fromIntegral y)]
-    propSet :: Label -> String -> Druid ()
-    propSet l str = setProperties l [WX.text := str]
-  
+    makeBehavior :: Frame -> Label -> Button -> Druid(Behavior (Druid ()))
+    makeBehavior f l b = do
+      event <- onCommand b
+      let beh = accum (0::Integer) (event  -=> (1 +)) 
+      let beh' = lift1 show beh |-> (l, text)
+      return beh'
 
+{-guiB :: Druid(Behavior (Druid ()))-}
+{-guiB = do-}
+  {-f <- createFrame [text := "Timing", on closing := exitSuccess]-}
+  {-l <- createLabel f [text := "Count"]-}
+  {-s <- createSpin f 1 5 []-}
+  {-setProperties f [size := sz 150 50]-}
+  {-setProperties s [position := point 0 30]-}
+  {-setProperties l [fontSize := 20]-}
+  {-makeBehavior f l s-}
+  {-where-}
+    {-makeBehavior :: Frame -> Label -> Spin -> Druid(Behavior (Druid ()))-}
+    {-makeBehavior f l s = do-}
+      {-let baseBeh = accum (0::Integer) (clock 1 -=> (1 +))-}
+      {-baseEvent <- onSelect s-}
+      {-let spinVal = snap baseEvent $ s @@ text-}
+      {-let iSpinVal = spinVal ==> toDouble-}
+      {-let event = return $ makeClock iSpinVal-}
+      {-newBeh <- EM.accum (return 0) (event EM.-=> return (1 +))-}
+      {-let fullBeh = baseBeh `untilB` newBeh-}
+      {-let beh' = lift1 show fullBeh |-> (l, text)-}
+      {-return beh'-}
+    {-toDouble :: Druid String -> Druid Double-}
+    {-toDouble s = s >>= \str -> return $ (read str :: Double)-}
+    {-makeClock :: Event (Druid Double) -> Event (Druid (Event ()))-}
+    {-makeClock e = do-}
+      {-e ==> (\v -> v >>= return . clock)-}
+
+
+  
 main :: IO ()
 main = do
-  --let initialBehavior = lift1 (setText l) $ accum "0" (onCommand b ==> (\_ -> strInc))
-  --start $ startEngine (Just initialGui) (hold never)
-  -- putStrLn "In Main"
-  WX.start $ startEngine initialGui
+  start $ startEngine guiA

@@ -35,6 +35,7 @@ data WXWidget =
   | WXButton (WX.Button ())
   | WXLabel (WX.StaticText ())
   | WXPanel (WX.Panel ())
+  | WXSpin (WX.SpinCtrl ())
 
 data WXWindow = forall a. WXWindow (WX.Window a)
   
@@ -45,6 +46,7 @@ type WidgetDelegatePair = (Maybe Tag, (Integer, WXWidget))
 data UIEvent = 
   Heartbeat 
   | Command Integer
+  | Select Integer 
   deriving (Eq, Show)
 
 data DruidData = DruidData { 
@@ -134,6 +136,7 @@ getWXWindow id = do
              WXLabel w -> WXWindow w
              WXButton w -> WXWindow w
              WXPanel w -> WXWindow w
+             WXSpin w -> WXWindow w
   
 runDruid :: Druid a -> DruidData -> IO (a, DruidData)
 runDruid druidOp state = runStateT druidOp state

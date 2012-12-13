@@ -12,6 +12,7 @@ import qualified Graphics.UI.WX as WX
 
 import Control.Monad
 import Control.Monad.IO.Class
+import Control.Applicative
 import System.Exit
 import System.Environment(getArgs)
 
@@ -94,12 +95,11 @@ guiD = do
       return ()
     randomPoints :: Druid (Int, Int)
     randomPoints = do
-      x <- liftIO $ randomRIO (300, 300)
-      y <- liftIO $ randomRIO (300, 300)
+      x <- liftIO $ randomRIO (0, 300)
+      y <- liftIO $ randomRIO (0, 300)
       return $ (x, y)
     empty :: Druid ()
     empty = return ()
-      
     
 
 main :: IO ()

@@ -44,7 +44,7 @@ guiAnimatingButton = do
     makeBehavior f b = do
       event <- onCommand b
       let x = (p2 50 50) + integral (p2 50 0)
-      let beh = x |-> (b, position)
+          beh = switch ((p2 50 50) |-> (b, position)) (event -=> return (x |-> (b, position)))
       return beh
 
 {-guiB :: Druid(Behavior (Druid ()))-}

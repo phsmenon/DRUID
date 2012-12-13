@@ -11,8 +11,10 @@ import Graphics.UI.WX hiding (Button, Frame, Panel, Widget, Event)
 import qualified Graphics.UI.WX as WX
 
 import Control.Monad
+import Control.Monad.IO.Class
 import System.Exit
 import System.Environment(getArgs)
+import Debug.Trace
 
 guiA :: Druid(Behavior (Druid ()))
 guiA = do
@@ -43,20 +45,23 @@ guiA = do
   {-where-}
     {-makeBehavior :: Frame -> Label -> Spin -> Druid(Behavior (Druid ()))-}
     {-makeBehavior f l s = do-}
-      {-let baseBeh = accum (0::Integer) (clock 1 -=> (1 +))-}
       {-baseEvent <- onSelect s-}
-      {-let spinVal = snap baseEvent $ s @@ text-}
-      {-let iSpinVal = spinVal ==> toDouble-}
-      {-let event = return $ makeClock iSpinVal-}
-      {-newBeh <- EM.accum (return 0) (event EM.-=> return (1 +))-}
+      {-let baseBeh = makeAcc (clock 1)-}
+      {-let newBeh = makeBeh baseEvent s-}
       {-let fullBeh = baseBeh `untilB` newBeh-}
-      {-let beh' = lift1 show fullBeh |-> (l, text)-}
-      {-return beh'-}
+      {-return $ fullBeh |||-> (l, text)-}
     {-toDouble :: Druid String -> Druid Double-}
-    {-toDouble s = s >>= \str -> return $ (read str :: Double)-}
-    {-makeClock :: Event (Druid Double) -> Event (Druid (Event ()))-}
-    {-makeClock e = do-}
-      {-e ==> (\v -> v >>= return . clock)-}
+    {-toDouble s = s >>= \str -> traceShow str $ return $ (read str :: Double)-}
+    {-makeClock :: Druid Double -> Druid (Event ())-}
+    {-makeClock = \v -> v >>= return . clock-}
+    {-makeAcc :: Event a -> Behavior (Druid Integer)-}
+    {-makeAcc e = accum (return 0) (e -=> (liftM (1 +)))-}
+    {-makeBeh :: Event a -> Spin -> Event (Druid (Behavior (Druid Integer)))-}
+    {-makeBeh switch s = switch -=> (makeClockFromSpin s >>= \c -> return makeAcc c)-}
+    {-makeClockFromSpin :: Spin -> Druid (Event ())-}
+    {-makeClockFromSpin s = let val = toDouble $ getProperty s text in makeClock val-}
+                      
+
 
 
   

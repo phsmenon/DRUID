@@ -18,6 +18,12 @@ import Graphics.UI.WX(Prop((:=)))
 (|->) :: Widget w => Behavior a -> (w, Attribute w a) -> Behavior (Druid ())
 (|->) behavior (w, attr) = lift1 (\v -> setProperty w (attr := v)) behavior
 
+(||->) :: (Widget w, Show a) => Behavior a -> (w, Attribute w String) -> Behavior (Druid ())
+(||->) behavior (w, attr) = lift1 (\v -> setProperty w (attr := show v)) behavior
+
+(|||->) :: (Widget w, Show a) => Behavior (Druid a) -> (w, Attribute w String) -> Behavior (Druid ())
+(|||->) behavior (w, attr) = lift1 (\v -> v >>= \v -> setProperty w (attr := show v)) behavior
+
 (@@) :: Widget w => w -> Attribute w a -> Behavior (Druid a)
 (@@) w attr = lift1 (uncurry getProperty) (lift0 (w, attr))
 

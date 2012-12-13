@@ -68,6 +68,15 @@ traceE text (Event a0) = f a0 where
                                          return (f a', ev)
                            Nothing -> return (f a', ev)
 
+traceEX :: String ->  Event a -> Event a
+-- Print event value on the console when it occurs.
+traceEX text (Event a0) = f a0 where
+  f a = Event $ \s -> do (Event a', ev) <- a s
+                         case ev of 
+                           Just v  -> do liftIO $ putStrLn text
+                                         return (f a', ev)
+                           Nothing -> return (f a', ev)
+
 -----------------------------------------------------------------
 -- Choices
 -----------------------------------------------------------------

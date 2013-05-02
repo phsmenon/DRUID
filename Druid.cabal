@@ -4,7 +4,7 @@
 name:                Druid
 version:             0.1.0.0
 synopsis:            A dynamic reactive GUI framework
--- description:         
+--description:         
 -- license:             
 license-file:        LICENSE
 author:              Hari Menon
@@ -14,7 +14,27 @@ category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
 
-executable Druid
-  main-is: Main.hs
-  -- other-modules:       
+library
   build-depends:       base, wx, time, transformers, mtl, random
+  exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine,
+                       Druid.EngineM, Druid.ReactiveUI, Druid.Types
+
+executable test-simple-click-counter
+  main-is:             simple-click-counter.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-simple-counter
+  main-is:             simple-counter.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-simple-animating-button
+  main-is:             simple-animating-button.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-random-buttons
+  main-is:             random-buttons.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random

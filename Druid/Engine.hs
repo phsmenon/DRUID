@@ -224,6 +224,18 @@ switch a0 e0 = f a0 e0 where
                                                    Nothing -> do (ba', av) <- a s 
                                                                  return (f ba' ee', av)
 												 
+switchLater :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
+-- Switch to a new behavior *every time* an event occurs
+switchLater a0 e0 = f a0 e0 where
+  f :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
+  f (Behavior a) (Event e) = Behavior $ \s -> do (ee', ev) <- e s
+                                                 case ev of
+                                                   Just b -> do newf <- b
+                                                                (ba', av) <- a s
+                                                                return (f newf ee', av)
+                                                   Nothing -> do (ba', av) <- a s 
+                                                                 return (f ba' ee', av)
+
 untilB :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
 -- Switch to a new behavior *the first time* an event occurs
 untilB b e = switch b $ once e 

@@ -9,6 +9,8 @@ import Control.Monad.IO.Class
 
 import Druid.DruidMonad
 
+import Debug.Trace
+
 ---------------------------------------------------------------
 -- Types Ahoy
 ---------------------------------------------------------------
@@ -127,6 +129,9 @@ instance Widget Panel where
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
   remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+
+instance Container Panel where
+  getDelegateContainer = getDelegate
 
 createPanel :: Container c => c -> [Property Panel] -> Druid Panel
 createPanel parent props = do

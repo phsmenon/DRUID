@@ -238,7 +238,7 @@ switchLater a0 e0 = f a0 e0 where
 
 untilB :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
 -- Switch to a new behavior *the first time* an event occurs
-untilB b e = switch b $ once e 
+untilB b e = switchLater b $ once e 
 
 accum :: a -> Event (a -> a) -> Behavior a
 -- Standard accumulator - except that the event stream produces functions that 

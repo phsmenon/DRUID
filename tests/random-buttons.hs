@@ -13,6 +13,7 @@ import qualified Graphics.UI.WX as WX
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Applicative
+import Data.List
 import System.Exit
 import System.Environment(getArgs)
 
@@ -23,29 +24,33 @@ gui = do
   f <- createFrame [text := "Click", size := sz 400 400, on closing := exitSuccess]
   p <- createPanel f []
   b <- createButton p [text := "Press", size := sz 70 30]
-  randomButtonBehavior p b
-  -- return $ lift0 empty
+  randomButtonBehavior p [b] 
   where
-    randomButtonBehavior :: Panel -> Button -> Druid (Behavior (Druid ()))
-    randomButtonBehavior p b = do
-      event <- onCommand b
+    randomButtonBehavior :: Panel -> [Button] -> Druid (Behavior (Druid ()))
+    randomButtonBehavior p bs = do
+      ---event <- onCommand b
       -- return $ hold empty (event -=> p ==> buildButtons)
       -- let ev = event -=> after (buildButtons p) (lift0 empty)
       -- return $ (lift0 empty) `switch` ev 
       -- let beh = (event -=> (liftM1 (seq $ buildButtons f))) beh
       -- lift0 empty `switch` beh
-      let behavior = lift0 empty `switchLater` (event -=> buildButtons p)
+      commandList <- mapM onCommand bs
+      let event = foldl1 (.|.) commandList
+      let future = (event -=> buildButtons p bs)
+      let behavior = (lift0 empty) `untilB` future
       return behavior
-    buildButtons :: Panel -> Druid (Behavior (Druid ()))
-    buildButtons p = do 
-      (x1, y1) <- randomPoints
-      (x2, y2) <- randomPoints
-      b1 <- createButton p [text := "New-1", position := point x1 y1]
-      b2 <- createButton p [text := "New-2", position := point x2 y2]
-      -- return ()
-      beh1 <- (randomButtonBehavior p b1)
-      beh2 <- (randomButtonBehavior p b2)
-      return (beh1 $$ beh2)
+    buildButtons :: Panel -> [Button] -> Druid (Behavior (Druid ()))
+    buildButtons p bs = do 
+      b1 <- randomButton p "New-1"
+      b2 <- randomButton p "New-2"
+      randomButtonBehavior p (bs ++ [b1, b2]) 
+      {-beh1 <- (randomButtonBehavior p b1)-}
+      {-beh2 <- (randomButtonBehavior p b2)-}
+      {-return (beh1 $$ beh2)-}
+    randomButton :: Panel -> String -> Druid Button 
+    randomButton p txt = do
+      (x, y) <- randomPoints
+      createButton p [text := txt, position := point x y]
     randomPoints :: Druid (Int, Int)
     randomPoints = do
       x <- liftIO $ randomRIO (0, 300)

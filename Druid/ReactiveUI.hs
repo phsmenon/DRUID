@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module Druid.ReactiveUI where
 
 import Druid.Engine
@@ -54,8 +56,40 @@ onSelect widget = do
     f _ = Nothing
 
 
-{-propertyBehavior :: Control w => Behavior a -> w -> WX.Attr wx a -> Behavior (Druid ())-}
-{-propertyBehavior behavior widget attribute = lift1 f behavior where-}
-  {-f :: a -> Druid ()-}
-  {-f val = do let id = getId w-}
-             
+setSize :: (Widget w, WX.Dimensions (Delegate w)) => w -> Behavior (Integer, Integer) -> Behavior (Druid ())
+setSize w behSz = beh' |-> (w, WX.outerSize) where
+  beh' = lift1 (\(wd, ht) -> WX.sz (fromIntegral wd) (fromIntegral ht)) behSz
+
+setPosition :: (Widget w, WX.Dimensions (Delegate w)) => w -> Behavior (Integer, Integer) -> Behavior (Druid ())
+setPosition w behPos = beh' |-> (w, WX.position) where
+  beh' = lift1 (\(x, y) -> WX.point (fromIntegral x) (fromIntegral y)) behPos
+
+
+setFontFace :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior String -> Behavior (Druid ())
+setFontFace w behFace = behFace |-> (w, WX.fontFace)
+
+setFontSize :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior Integer -> Behavior (Druid ())
+setFontSize w behSz = lift1 (\sz -> fromIntegral sz) behSz |-> (w, WX.fontSize)
+
+setFontBold :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior Bool -> Behavior (Druid ())
+setFontBold w behBold = lift1 (\b -> if b then WX.WeightBold else WX.WeightNormal) behBold |-> (w, WX.fontWeight)
+
+setFontItalic :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior Bool -> Behavior (Druid ())
+setFontItalic w behIt = lift1 (\b -> if b then WX.ShapeItalic else WX.ShapeNormal) behIt |-> (w, WX.fontShape)
+
+setTextColor :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior (WX.Color) -> Behavior (Druid ())
+setTextColor w behColor = behColor |-> (w, WX.textColor)
+
+setTextBackground :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior (WX.Color) -> Behavior (Druid ())
+setTextBackground w behColor = behColor |-> (w, WX.textBgcolor)
+
+setColor :: (Widget w, WX.Colored (Delegate w)) => w -> Behavior (WX.Color) -> Behavior (Druid ())
+setColor w behColor = behColor |-> (w, WX.color)
+
+setBackground :: (Widget w, WX.Colored (Delegate w)) => w -> Behavior (WX.Color) -> Behavior (Druid ())
+setBackground w behColor = behColor |-> (w, WX.bgcolor)
+
+
+setText :: (Widget w, WX.Textual (Delegate w)) => w -> Behavior String -> Behavior (Druid ())
+setText w behText = behText |-> (w, WX.text)
+

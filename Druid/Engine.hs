@@ -169,8 +169,11 @@ mapEs st0 f (Event a0) = f' st0 a0 where
                                             return (f' st' a', v')
 once :: Event a -> Event a
 -- Make this event fire only once
-once e = mapEs False f e where
-  f (occurred, v) = (True, if occurred then Nothing else Just v)
+once (Event a0) = f a0 False where
+  f a occurred = Event $ \s -> if (occurred) then   -- Don't even bother to age the base event if it has already occurred
+                                 return (f a True, Nothing)
+                               else
+                                 a s >>= \(Event a', ev) -> return (f a' (isJust ev), ev)
 
 when :: Behavior Bool -> Event ()
 -- Create an event when this behavior switches to True
@@ -307,7 +310,7 @@ startEngine :: Druid(Behavior (Druid ())) -> IO ()
 startEngine behavior = do
   druidData <- initializeDruidData -- behavior
   -- Get the behavior out of the monad and reify changes immediately
-  let timerAction = standardEventReceiver >>= (createInternalTimer 100)
+  let timerAction = standardEventReceiver >>= (createInternalTimer 75)
   (beh', druidData') <- runDruid (behavior <* doOps <* timerAction) druidData 
   writeIORef (stepperDataRef druidData') $ Just (druidData', beh')
   

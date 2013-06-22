@@ -38,3 +38,8 @@ executable test-random-buttons
   main-is:             random-buttons.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-reactive-properties
+  main-is:             reactive-properties.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random

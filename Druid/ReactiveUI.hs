@@ -77,6 +77,11 @@ setPosition :: (Widget w, WX.Dimensions (Delegate w)) => w -> Behavior (Integer,
 setPosition w behPos = beh' |-> (w, WX.position) where
   beh' = lift1 (\(x, y) -> WX.point (fromIntegral x) (fromIntegral y)) behPos
 
+getPreferredSize :: (Widget w, WX.Dimensions (Delegate w)) => w -> Behavior (Integer, Integer)
+getPreferredSize w = lift1 (width &&& height) $ w |@@| WX.bestSize where
+  width sz = fromIntegral $ WX.sizeW sz
+  height sz = fromIntegral$ WX.sizeH sz
+
 
 setFontFace :: (Widget w, WX.Literate (Delegate w)) => w -> Behavior String -> Behavior (Druid ())
 setFontFace w behFace = behFace |-> (w, WX.fontFace)

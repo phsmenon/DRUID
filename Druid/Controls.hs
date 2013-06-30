@@ -36,6 +36,9 @@ class Widget w => CommandEventSource w where
 class Widget w => SelectEventSource w where
   registerSelectListener :: w -> (UIEvent -> IO ()) -> Druid ()
 
+class Widget w => ResizeEventSource w where
+  registerResizeListener :: w -> (UIEvent -> IO ()) -> Druid ()
+
 ---------------------------------------------------------------
 -- Frame
 ---------------------------------------------------------------
@@ -55,11 +58,19 @@ instance Widget Frame where
 instance Container Frame where
   getDelegateContainer = getDelegate
 
+instance ResizeEventSource Frame where
+  registerResizeListener (Frame id) handler = 
+    deferRegisterEventHandler id getFrameDelegate WX.resize (handler $ Resize id)
+
+getFrameDelegate :: Integer -> Druid (Delegate Frame)
+getFrameDelegate id = getWXWidget id >>= \(WXFrame w) -> return w
+
 createFrame :: [Property Frame] -> Druid Frame
 createFrame props = do
   id <- getNextId 
   createTopLevelWidget id (WX.frame props) WXFrame
   return $ Frame id
+
 
 ---------------------------------------------------------------
 -- Label
@@ -132,6 +143,13 @@ instance Widget Panel where
 
 instance Container Panel where
   getDelegateContainer = getDelegate
+
+instance ResizeEventSource Panel where
+  registerResizeListener (Panel id) handler = 
+    deferRegisterEventHandler id getPanelDelegate WX.resize (handler $ Resize id)
+
+getPanelDelegate :: Integer -> Druid (Delegate Panel)
+getPanelDelegate id = getWXWidget id >>= \(WXPanel w) -> return w
 
 createPanel :: Container c => c -> [Property Panel] -> Druid Panel
 createPanel parent props = do

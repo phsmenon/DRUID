@@ -17,7 +17,8 @@ cabal-version:       >=1.8
 library
   build-depends:       base, wx, time, transformers, mtl, random
   exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine,
-                       Druid.EngineM, Druid.ReactiveUI, Druid.Types
+                       Druid.EngineM, Druid.ReactiveUI, Druid.Types,
+                       Druid.WXExtensions
 
 executable test-simple-click-counter
   main-is:             simple-click-counter.hs

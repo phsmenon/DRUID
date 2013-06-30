@@ -27,7 +27,7 @@ cycleBehavior ev lst = lift0 (head lst) `untilB` (ev -=> (return $ cycleBehavior
 guiA :: Druid(Behavior (Druid ()))
 guiA = do
   f <- createFrame [text := "Reactive Properties", on closing := exitSuccess]
-  l <- createLabel f [text := "0", outerSize := sz 75 75, position := point 30 20, fontSize := 20]
+  l <- createLabel f [text := "0", clientSize := sz 75 150, position := point 30 20, fontSize := 20]
   b <- createButton f [text := "Press Me", position := point 100 20]
   setProperties f [outerSize := sz 500 300]
   makeBehavior f l b
@@ -35,7 +35,7 @@ guiA = do
     makeBehavior :: Frame -> Label -> Button -> Druid(Behavior (Druid ()))
     makeBehavior f l b = do
       event <- onCommand b
-      let beh = cycleBehavior event ["&Bat", "Cat", "Dog", "Eel", "Frog"]
+      let beh = cycleBehavior event ["Bat", "Cat", "Dog", "Eel", "Frog"]
       let beh' = setText l beh
       let beh'' = setTextColor l (cycleBehavior (clock 2) [WX.red, WX.blue, WX.green])
       return $ (beh' $$ beh'')

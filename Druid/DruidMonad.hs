@@ -44,6 +44,7 @@ data UIEvent =
   Heartbeat 
   | Command Integer
   | Select Integer 
+  | Resize Integer
   deriving (Eq, Show)
 
 data DruidData = DruidData { 

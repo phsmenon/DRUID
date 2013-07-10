@@ -21,25 +21,35 @@ class GraphicsContainer w where
 
 class GraphicsComponent g where
   onAttachToContainer :: GraphicsContainer w => g -> w -> IO ()
-  onDetachFromContainer :: GraphicsContainer w => g -> w -> IO ()
+  onDetachFromContainer :: g -> IO ()
   onDraw :: g -> DC () -> IO ()
 
+
+data AnyGraphicsContainer = forall w. GraphicsContainer w => AnyGraphicsContainer w
+
+data AnyGraphicsComponent = forall w. GraphicsComponent w => AnyGraphicsComponent w
 
 ---------------------------------------------------------------------------------
 
 data DimensionData = DimensionData { area :: Rect }
 
-
-----------------------------------------------------------------------------------
-
 class SimpleGraphics g where
-  getParentData :: GraphicsContainer w => g -> IORef (Maybe w)
+  getParentData :: g -> IORef (Maybe AnyGraphicsContainer)
   getDimensionData :: g -> IORef DimensionData
   draw :: g -> DC () -> IO ()
 
-{-instance (SimpleGraphics a) => GraphicsComponent a where-}
-  {-onAttachToContainer g w = return () -}
-  {-onDetachFromContainer g w = return ()-}
-  {-onDraw g dc = return ()-}
+newtype SimpleGraphicsWrapper a = SimpleGraphicsWrapper { unwrapSimpleGraphics :: a }
+
+instance SimpleGraphics g => GraphicsComponent (SimpleGraphicsWrapper g) where
+  onAttachToContainer g w = writeIORef (getParentData $ unwrapSimpleGraphics g) (Just $ AnyGraphicsContainer w)
+  onDetachFromContainer g = writeIORef (getParentData $ unwrapSimpleGraphics g) (Nothing)
+  onDraw g dc = draw (unwrapSimpleGraphics g) dc
+
+{-instance SimpleGrahics g => Dimensions (SimpleGraphicsWrapper g) where-}
+  {-outerSize :: -}
+
+----------------------------------------------------------------------------------
+
+
 
 

@@ -132,6 +132,32 @@ createRectangle w props = do
       set rectangle props
       return rectangle
 
+
+
+data Ellipse_ = Ellipse (Integer, IORef SimpleGraphicsData)
+
+instance SimpleGraphics Ellipse_ where
+  getSimpleGraphicsData (Ellipse (_, sgd)) = sgd
+  draw g dc = fetchSimpleGraphicsData g sgdBounds >>= (\bounds -> drawRect dc bounds [])
+  getId (Ellipse (id, _))= id
+
+type Ellipse = SimpleGraphicsWrapper Ellipse_  
+
+createEllipse :: GraphicsContainer w => w -> [Prop Ellipse] -> IO Ellipse
+createEllipse w props = do
+  id <- getNextComponentId
+  sgdRef <- newIORef $ makeInitialRecord w
+  makeEllipse id sgdRef
+  where
+    makeInitialRecord w = SimpleGraphicsData {
+      sgdContainer = Just $ AnyGraphicsContainer w, 
+      sgdBounds = rectFromSize $ sz 100 100, 
+      sgdBestSize = sz 100 100}
+    makeEllipse id sgdRef = do
+      let ellipse = SimpleGraphicsWrapper $ Ellipse (id, sgdRef)
+      set ellipse props
+      return ellipse
+
 ----------------------------------------------------------------------------------
 -- Basic Graphics Containers
 ----------------------------------------------------------------------------------
@@ -161,12 +187,6 @@ paintComponents :: GraphicsComponentCollection -> Int -> DC () -> IO ()
 paintComponents collection id dc = do
   components <- getGraphicsComponents graphicsComponentData id
   mapM_ (\(AnyGraphicsComponent g) -> onDraw g dc) components
-
-paintBackground :: (Dimensions w, Colored w, Paint w) => w -> DC () -> IO ()
-paintBackground w dc = do
-  bg <- get w bgcolor
-  sz <- get w clientSize
-  drawRect dc (rectFromSize sz) [brushColor := bg, penColor := bg]
 
 
 instance GraphicsContainer (Frame a) where
@@ -206,3 +226,10 @@ resizeRect rc sz = rect (rectTopLeft rc) sz
 
 repositionRect :: Rect -> Point -> Rect
 repositionRect rc pt = rect pt (rectSize rc)
+
+
+paintBackground :: (Dimensions w, Colored w, Paint w) => w -> DC () -> IO ()
+paintBackground w dc = do
+  bg <- get w bgcolor
+  sz <- get w clientSize
+  drawRect dc (rectFromSize sz) [brushColor := bg, penColor := bg]

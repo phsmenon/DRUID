@@ -152,12 +152,50 @@ removeGraphicsComponent collection id g = do
   H.insert collection id $ maybe [] (delete g) maybeList
 
 
+getGraphicsComponents :: GraphicsComponentCollection -> Int -> IO [AnyGraphicsComponent]
+getGraphicsComponents collection id = do
+  maybeList <- H.lookup collection id
+  return $ maybe [] (\x -> x) maybeList
+
+paintComponents :: GraphicsComponentCollection -> Int -> DC () -> IO ()
+paintComponents collection id dc = do
+  components <- getGraphicsComponents graphicsComponentData id
+  mapM_ (\(AnyGraphicsComponent g) -> onDraw g dc) components
+
+paintBackground :: (Dimensions w, Colored w, Paint w) => w -> DC () -> IO ()
+paintBackground w dc = do
+  bg <- get w bgcolor
+  sz <- get w clientSize
+  drawRect dc (rectFromSize sz) [brushColor := bg, penColor := bg]
+
 
 instance GraphicsContainer (Frame a) where
   addGraphics fr g = get fr identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
   removeGraphics fr g = get fr identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
   requestRepaint fr = repaint fr
   
+createFrame :: [Prop (Frame ())] -> IO (Frame ())
+createFrame props = do
+  fr <- frame props
+  set fr [on paint := (painter fr)]
+  return fr
+  where
+    painter fr dc rc = paintBackground fr dc >> get fr identity >>= \id -> paintComponents graphicsComponentData id dc
+      
+
+instance GraphicsContainer (Panel a) where
+  addGraphics pl g = get pl identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
+  removeGraphics pl g = get pl identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
+  requestRepaint pl = repaint pl
+  
+createPanel :: Window a -> [Prop (Panel ())] -> IO (Panel ())
+createPanel w props = do
+  pl <- panel w props
+  set pl [on paint := (painter pl)]
+  return pl
+  where
+    painter pl dc rc = paintBackground pl dc >> get pl identity >>= \id -> paintComponents graphicsComponentData id dc
+      
 
 ----------------------------------------------------------------------------------
 -- General WX helpers

@@ -5,6 +5,8 @@ module Druid.Controls where
 import qualified Graphics.UI.WX as WX  hiding ((:=))
 import Graphics.UI.WX(Prop((:=)), Attr(..))
 
+import qualified Druid.WXExtensions as WXExt
+
 import Control.Monad.IO.Class
 
 import Druid.DruidMonad
@@ -68,7 +70,8 @@ getFrameDelegate id = getWXWidget id >>= \(WXFrame w) -> return w
 createFrame :: [Property Frame] -> Druid Frame
 createFrame props = do
   id <- getNextId 
-  createTopLevelWidget id (WX.frame props) WXFrame
+  {-createTopLevelWidget id (WX.frame props) WXFrame-}
+  createTopLevelWidget id (WXExt.createFrame props) WXFrame
   return $ Frame id
 
 
@@ -154,7 +157,7 @@ getPanelDelegate id = getWXWidget id >>= \(WXPanel w) -> return w
 createPanel :: Container c => c -> [Property Panel] -> Druid Panel
 createPanel parent props = do
   id <- getNextId
-  createControlWidget id (getId parent) (\w -> WX.panel w props) WXPanel
+  createControlWidget id (getId parent) (\w -> WXExt.createPanel w props) WXPanel
   return $ Panel id
   
 ---------------------------------------------------------------

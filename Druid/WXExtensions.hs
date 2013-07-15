@@ -2,23 +2,17 @@
 
 module Druid.WXExtensions where
 
-{-import qualified Graphics.UI.WX as WX  hiding ((:=))-}
-{-import Graphics.UI.WX(Prop((:=)), Attr(..))-}
 import Graphics.UI.WX
 
-import Control.Monad
 import Control.Applicative
-import Control.Monad.IO.Class
 import Data.IORef
 import Data.List
 import Data.Unique
 import System.IO.Unsafe
+    
+import Debug.Trace
 
 import qualified Data.HashTable.IO as H
-
-import Druid.DruidMonad
-
-import Debug.Trace
 
 ---------------------------------------------------------------------------------
 -- Classes for graphics components and containers
@@ -52,7 +46,9 @@ instance Ord AnyGraphicsComponent where
 ---------------------------------------------------------------------------------
 
 data SimpleGraphicsData = SimpleGraphicsData 
-  { sgdContainer :: Maybe AnyGraphicsContainer, sgdBounds :: Rect, sgdBestSize :: Size }
+  { sgdContainer :: Maybe AnyGraphicsContainer, 
+    sgdBounds :: Rect, sgdBestSize :: Size, 
+    sgdBackground :: Color, sgdForeground :: Color}
 
 class SimpleGraphics g where
   getSimpleGraphicsData :: g -> IORef SimpleGraphicsData
@@ -99,6 +95,13 @@ instance SimpleGraphics g => Dimensions (SimpleGraphicsWrapper g) where
     readSize g = fetchSimpleGraphicsData g (rectSize . sgdBounds)
     writeSize g sz = updateSimpleGraphicsData g (\r -> r { sgdBounds = resizeRect (sgdBounds r) sz })
 
+instance SimpleGraphics g => Colored (SimpleGraphicsWrapper g) where
+  bgcolor = newAttr "bgcolor" readBgColor writeBgColor where
+    readBgColor g = fetchSimpleGraphicsData g sgdBackground
+    writeBgColor g color = updateSimpleGraphicsData g (\r -> r { sgdBackground = color })
+  color = newAttr "color" readFgColor writeFgColor where
+    readFgColor g = fetchSimpleGraphicsData g sgdForeground
+    writeFgColor g color = updateSimpleGraphicsData g (\r -> r { sgdForeground = color })
 
 ----------------------------------------------------------------------------------
 -- Basic Graphics components
@@ -111,22 +114,30 @@ getNextComponentId = newUnique >>= \u -> return . fromIntegral $ hashUnique u
 data Rectangle_ = Rectangle (Integer, IORef SimpleGraphicsData)
 
 instance SimpleGraphics Rectangle_ where
-  getSimpleGraphicsData (Rectangle (_, sgd)) = sgd
-  draw g dc = fetchSimpleGraphicsData g sgdBounds >>= (\bounds -> drawRect dc bounds [])
   getId (Rectangle (id, _))= id
+  getSimpleGraphicsData (Rectangle (_, sgd)) = sgd
+  draw g dc = do
+    bounds <- fetchSimpleGraphicsData g sgdBounds 
+    bg <- fetchSimpleGraphicsData g sgdBackground
+    fg <- fetchSimpleGraphicsData g sgdForeground
+    drawRect dc bounds [bgcolor := bg, color := fg]
 
 type Rectangle = SimpleGraphicsWrapper Rectangle_  
 
 createRectangle :: GraphicsContainer w => w -> [Prop Rectangle] -> IO Rectangle
 createRectangle w props = do
   id <- getNextComponentId
-  sgdRef <- newIORef $ makeInitialRecord w
-  makeRectangle id sgdRef
+  sgdRef <- newIORef makeInitialRecord
+  rectangle <- makeRectangle id sgdRef
+  addGraphics w rectangle
+  return rectangle
   where
-    makeInitialRecord w = SimpleGraphicsData {
-      sgdContainer = Just $ AnyGraphicsContainer w, 
+    makeInitialRecord = SimpleGraphicsData {
+      sgdContainer = Nothing,
       sgdBounds = rectFromSize $ sz 100 100, 
-      sgdBestSize = sz 100 100}
+      sgdBestSize = sz 100 100,
+      sgdBackground = rgb 255 255 255,
+      sgdForeground = rgb 0 0 0}
     makeRectangle id sgdRef = do
       let rectangle = SimpleGraphicsWrapper $ Rectangle (id, sgdRef)
       set rectangle props
@@ -137,22 +148,30 @@ createRectangle w props = do
 data Ellipse_ = Ellipse (Integer, IORef SimpleGraphicsData)
 
 instance SimpleGraphics Ellipse_ where
-  getSimpleGraphicsData (Ellipse (_, sgd)) = sgd
-  draw g dc = fetchSimpleGraphicsData g sgdBounds >>= (\bounds -> drawRect dc bounds [])
   getId (Ellipse (id, _))= id
+  getSimpleGraphicsData (Ellipse (_, sgd)) = sgd
+  draw g dc = do
+    bounds <- fetchSimpleGraphicsData g sgdBounds 
+    bg <- fetchSimpleGraphicsData g sgdBackground
+    fg <- fetchSimpleGraphicsData g sgdForeground
+    ellipse dc bounds [bgcolor := bg, color := fg]
 
 type Ellipse = SimpleGraphicsWrapper Ellipse_  
 
 createEllipse :: GraphicsContainer w => w -> [Prop Ellipse] -> IO Ellipse
 createEllipse w props = do
   id <- getNextComponentId
-  sgdRef <- newIORef $ makeInitialRecord w
-  makeEllipse id sgdRef
+  sgdRef <- newIORef makeInitialRecord
+  ellipse <- makeEllipse id sgdRef
+  addGraphics w ellipse
+  return ellipse           
   where
-    makeInitialRecord w = SimpleGraphicsData {
-      sgdContainer = Just $ AnyGraphicsContainer w, 
+    makeInitialRecord = SimpleGraphicsData {
+      sgdContainer = Nothing,
       sgdBounds = rectFromSize $ sz 100 100, 
-      sgdBestSize = sz 100 100}
+      sgdBestSize = sz 100 100,
+      sgdBackground = rgb 255 255 255,
+      sgdForeground = rgb 0 0 0}
     makeEllipse id sgdRef = do
       let ellipse = SimpleGraphicsWrapper $ Ellipse (id, sgdRef)
       set ellipse props

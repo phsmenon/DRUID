@@ -14,6 +14,8 @@ import Data.IORef
 import qualified Graphics.UI.WX as WX  hiding ((:=))
 import Graphics.UI.WX(Prop((:=)))
 
+import qualified Druid.WXExtensions as WXExt
+
 ------------------------------------------------------------------
 -- Data Types for the Engine
 ------------------------------------------------------------------
@@ -33,6 +35,8 @@ data WXWidget =
   | WXLabel (WX.StaticText ())
   | WXPanel (WX.Panel ())
   | WXSpin (WX.SpinCtrl ())
+  | WXRectangle WXExt.Rectangle
+  | WXEllipse WXExt.Ellipse
 
 data WXWindow = forall a. WXWindow (WX.Window a)
   
@@ -135,12 +139,13 @@ getWXWindow id = do
              WXButton w -> WXWindow w
              WXPanel w -> WXWindow w
              WXSpin w -> WXWindow w
-  
+             _        -> error "Not a WX.Window"
+
 runDruid :: Druid a -> DruidData -> IO (a, DruidData)
-runDruid druidOp state = runStateT druidOp state
+runDruid = runStateT 
 
 execDruid :: Druid () -> DruidData -> IO DruidData
-execDruid druidOp state = execStateT druidOp state
+execDruid = execStateT
 
 doOps :: Druid ()
 doOps = do

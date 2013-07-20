@@ -4,6 +4,7 @@ module Druid.WXExtensions where
 
 import Graphics.UI.WX
 
+import Control.Monad
 import Control.Applicative
 import Data.IORef
 import Data.List
@@ -32,14 +33,26 @@ class GraphicsComponent g where
 
 data AnyGraphicsContainer = forall w. GraphicsContainer w => AnyGraphicsContainer w
 
+instance GraphicsContainer AnyGraphicsContainer where
+  addGraphics (AnyGraphicsContainer w) = addGraphics w 
+  removeGraphics (AnyGraphicsContainer w) = removeGraphics w 
+  requestRepaint (AnyGraphicsContainer w) = requestRepaint w
+
 data AnyGraphicsComponent = forall w. GraphicsComponent w => AnyGraphicsComponent w
 
 instance Eq AnyGraphicsComponent where
-  (AnyGraphicsComponent w1) == (AnyGraphicsComponent w2) = (getComponentId w1) == (getComponentId w2)
+  (AnyGraphicsComponent w1) == (AnyGraphicsComponent w2) = getComponentId w1 == getComponentId w2
 
 instance Ord AnyGraphicsComponent where
   compare (AnyGraphicsComponent w1) (AnyGraphicsComponent w2) = 
     compare (getComponentId w1) (getComponentId w2)
+
+instance GraphicsComponent AnyGraphicsComponent where
+  getComponentId (AnyGraphicsComponent g) = getComponentId g
+  onAttachToContainer (AnyGraphicsComponent g) = onAttachToContainer g
+  onDetachFromContainer (AnyGraphicsComponent g) = onDetachFromContainer g
+  onDraw (AnyGraphicsComponent g) = onDraw g
+
 
 ---------------------------------------------------------------------------------
 -- "Abstract" class for simple graphics
@@ -54,12 +67,15 @@ class SimpleGraphics g where
   getSimpleGraphicsData :: g -> IORef SimpleGraphicsData
   getId :: g -> Integer
   draw :: g -> DC () -> IO ()
+  notify :: g -> IO ()
+
+  notify g = fetchSimpleGraphicsData g sgdContainer >>= \c -> maybe (return ()) requestRepaint c
 
 fetchSimpleGraphicsData :: SimpleGraphics g => g -> (SimpleGraphicsData -> a) -> IO a
 fetchSimpleGraphicsData g processFn = processFn <$> readIORef (getSimpleGraphicsData g)
 
 updateSimpleGraphicsData :: SimpleGraphics g => g -> (SimpleGraphicsData -> SimpleGraphicsData) -> IO ()
-updateSimpleGraphicsData g processFn = modifyIORef (getSimpleGraphicsData g) processFn
+updateSimpleGraphicsData g processFn = modifyIORef (getSimpleGraphicsData g) processFn >> notify g
 
 
 newtype SimpleGraphicsWrapper a = SimpleGraphicsWrapper { unwrapSimpleGraphics :: a }
@@ -68,6 +84,7 @@ instance SimpleGraphics g => SimpleGraphics (SimpleGraphicsWrapper g) where
   getSimpleGraphicsData g = getSimpleGraphicsData $ unwrapSimpleGraphics g
   draw g dc = draw (unwrapSimpleGraphics g) dc
   getId g = getId (unwrapSimpleGraphics g)
+  notify g = notify (unwrapSimpleGraphics g)
 
 
 instance SimpleGraphics g => GraphicsComponent (SimpleGraphicsWrapper g) where
@@ -209,8 +226,8 @@ paintComponents collection id dc = do
 
 
 instance GraphicsContainer (Frame a) where
-  addGraphics fr g = get fr identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
-  removeGraphics fr g = get fr identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
+  addGraphics fr g = get fr identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g) >> onAttachToContainer g fr
+  removeGraphics fr g = get fr identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g) >> onDetachFromContainer g
   requestRepaint fr = repaint fr
   
 createFrame :: [Prop (Frame ())] -> IO (Frame ())
@@ -223,8 +240,8 @@ createFrame props = do
       
 
 instance GraphicsContainer (Panel a) where
-  addGraphics pl g = get pl identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
-  removeGraphics pl g = get pl identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g)
+  addGraphics pl g = get pl identity >>= \id -> addGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g) >> onAttachToContainer g pl
+  removeGraphics pl g = get pl identity >>= \id -> removeGraphicsComponent graphicsComponentData id (AnyGraphicsComponent g) >> onDetachFromContainer g
   requestRepaint pl = repaint pl
   
 createPanel :: Window a -> [Prop (Panel ())] -> IO (Panel ())

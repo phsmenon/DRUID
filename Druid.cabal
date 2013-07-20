@@ -49,3 +49,8 @@ executable test-graphics-components
   main-is:             graphics-components.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-reactive-graphics
+  main-is:             reactive-graphics.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random

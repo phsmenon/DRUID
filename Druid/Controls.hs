@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, ExistentialQuantification, RankNTypes, ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies, ExistentialQuantification, RankNTypes, ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
 
 module Druid.Controls where
 
@@ -29,8 +29,12 @@ class (Property w ~ Prop (Delegate w), Attribute w ~ Attr (Delegate w)) => Widge
   setProperty w prop = setProperties w [prop]
   remove :: w -> Druid ()
 
-class Widget w => Container w where
-  getDelegateContainer :: w -> Druid(Delegate w)
+class (Widget w, WXExt.GraphicsContainer (GraphicsContainerDelegate w)) => Container w where
+  type GraphicsContainerDelegate w :: *
+  getContainerDelegate :: w -> Druid (Delegate w)
+  getGraphicsContainer :: w -> Druid (GraphicsContainerDelegate w)
+
+  getContainerDelegate = getDelegate
 
 class Widget w => CommandEventSource w where
   registerCommandListener :: w -> (UIEvent -> IO ()) -> Druid ()
@@ -58,7 +62,8 @@ instance Widget Frame where
   remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 instance Container Frame where
-  getDelegateContainer = getDelegate
+  type GraphicsContainerDelegate Frame = WX.Frame ()
+  getGraphicsContainer = getDelegate
 
 instance ResizeEventSource Frame where
   registerResizeListener (Frame id) handler = 
@@ -90,7 +95,6 @@ instance Widget Label where
   getProperty = getWidgetProperty
   setProperties w props = addUpdateOp $ setWidgetProperties w props
   remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
-
 
 createLabel :: Container c => c -> [Property Label] -> Druid Label
 createLabel parent props = do
@@ -145,7 +149,8 @@ instance Widget Panel where
   remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
 
 instance Container Panel where
-  getDelegateContainer = getDelegate
+  type GraphicsContainerDelegate Panel = WX.Panel ()
+  getGraphicsContainer = getDelegate
 
 instance ResizeEventSource Panel where
   registerResizeListener (Panel id) handler = 
@@ -192,6 +197,56 @@ instance SelectEventSource Spin where
     deferRegisterEventHandler id getSpinDelegate WX.select (handler $ Select id)
 
 ---------------------------------------------------------------
+-- Rectangle
+---------------------------------------------------------------
+
+data Rectangle = Rectangle Integer
+
+instance Widget Rectangle where
+  type Delegate Rectangle = WXExt.Rectangle
+  type Attribute Rectangle = WX.Attr WXExt.Rectangle
+  type Property Rectangle = Prop WXExt.Rectangle
+  getId (Rectangle id) = id
+  getDelegate (Rectangle id) = getWXWidget id >>= \(WXRectangle w) -> return w
+  getProperty = getWidgetProperty
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = return () -- TODO: addRemoveOp $ setWidgetProperties w [WX.visible := False]
+
+createRectangle :: Container c => c -> [Property Rectangle] -> Druid Rectangle
+createRectangle parent props = do
+  id <- getNextId
+  createGraphicalWidget id parent (\w -> WXExt.createRectangle w props) WXRectangle
+  return $ Rectangle id  
+
+getRectangleDelegate :: Integer -> Druid (Delegate Rectangle)
+getRectangleDelegate id = getWXWidget id >>= \(WXRectangle w) -> return w
+
+---------------------------------------------------------------
+-- Circle
+---------------------------------------------------------------
+
+data Ellipse = Ellipse Integer
+
+instance Widget Ellipse where
+  type Delegate Ellipse = WXExt.Ellipse
+  type Attribute Ellipse = WX.Attr WXExt.Ellipse
+  type Property Ellipse = Prop WXExt.Ellipse
+  getId (Ellipse id) = id
+  getDelegate (Ellipse id) = getWXWidget id >>= \(WXEllipse w) -> return w
+  getProperty = getWidgetProperty
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = return () -- TODO: addRemoveOp $ setWidgetProperties w [WX.visible := False]
+
+createEllipse :: Container c => c -> [Property Ellipse] -> Druid Ellipse
+createEllipse parent props = do
+  id <- getNextId
+  createGraphicalWidget id parent (\w -> WXExt.createEllipse w props) WXEllipse
+  return $ Ellipse id  
+
+getEllipseDelegate :: Integer -> Druid (Delegate Ellipse)
+getEllipseDelegate id = getWXWidget id >>= \(WXEllipse w) -> return w
+
+---------------------------------------------------------------
 -- Internal Timer
 ---------------------------------------------------------------
   
@@ -223,6 +278,12 @@ createControlWidget id parent delegate wrapper = addCreateOp $ do
   w <- liftIO $ delegate w
   storeDelegate id (wrapper w)  
 
+createGraphicalWidget :: (Container c) => Integer ->  c -> (forall w. WXExt.GraphicsContainer w => w -> IO a) -> (a -> WXWidget) -> Druid ()
+createGraphicalWidget id parent delegate wrapper = addCreateOp $ do
+  WXExt.AnyGraphicsContainer w <- getGraphicalContainer parent
+  g <- liftIO $ delegate w
+  storeDelegate id (wrapper g)  
+
 setWidgetProperties :: Widget w => w -> [Property w] -> Druid ()
 setWidgetProperties widget props = do
   wxObj <- getDelegate widget
@@ -232,3 +293,11 @@ getWidgetProperty :: Widget w => w -> Attribute w a -> Druid a
 getWidgetProperty widget attr = do
   wxObj <- getDelegate widget
   liftIO $ WX.get wxObj attr
+
+getGraphicalContainer :: Widget w => w -> Druid WXExt.AnyGraphicsContainer
+getGraphicalContainer widget = do
+  wxwidget <- getWXWidget $ getId widget
+  return $ case wxwidget of
+             WXFrame w -> WXExt.AnyGraphicsContainer w
+             WXPanel w -> WXExt.AnyGraphicsContainer w
+             _         -> error "Not a graphics container"

@@ -18,7 +18,7 @@ library
   build-depends:       base, wx, time, transformers, mtl, random, hashtables
   exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine,
                        Druid.EngineM, Druid.ReactiveUI, Druid.Types,
-                       Druid.WXExtensions
+                       Druid.WXExtensions, Druid.Layout
 
 executable test-simple-click-counter
   main-is:             simple-click-counter.hs

@@ -33,6 +33,7 @@ data WXWidget =
     WXFrame (WX.Frame ())
   | WXButton (WX.Button ())
   | WXLabel (WX.StaticText ())
+  | WXTextField (WX.TextCtrl ())
   | WXPanel (WX.Panel ())
   | WXSpin (WX.SpinCtrl ())
   | WXRectangle WXExt.Rectangle
@@ -49,6 +50,7 @@ data UIEvent =
   | Command Integer
   | Select Integer 
   | Resize Integer
+  | TextChange Integer
   deriving (Eq, Show)
 
 data DruidData = DruidData { 

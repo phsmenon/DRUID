@@ -15,7 +15,7 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  build-depends:       base, wx, time, transformers, mtl, random, hashtables
+  build-depends:       base, wx, wxcore, time, transformers, mtl, random, hashtables
   exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine,
                        Druid.EngineM, Druid.ReactiveUI, Druid.Types,
                        Druid.WXExtensions, Druid.Layout

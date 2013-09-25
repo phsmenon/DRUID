@@ -5,6 +5,8 @@ module Druid.Controls where
 import qualified Graphics.UI.WX as WX  hiding ((:=))
 import Graphics.UI.WX(Prop((:=)), Attr(..))
 
+import qualified Graphics.UI.WXCore as WXCore
+
 import qualified Druid.WXExtensions as WXExt
 
 import Control.Monad.IO.Class
@@ -44,6 +46,9 @@ class Widget w => SelectEventSource w where
 
 class Widget w => ResizeEventSource w where
   registerResizeListener :: w -> (UIEvent -> IO ()) -> Druid ()
+
+class Widget w => TextChangeEventSource w where
+  registerTextChangeListener :: w -> (UIEvent -> IO ()) -> Druid ()
 
 ---------------------------------------------------------------
 -- Frame
@@ -131,6 +136,38 @@ createButton parent props = do
   id <- getNextId
   createControlWidget id (getId parent) (\w -> WX.button w props) WXButton
   return $ Button id
+
+---------------------------------------------------------------
+-- Text Field
+---------------------------------------------------------------
+
+data TextField = TextField Integer
+  
+instance Widget TextField where
+  type Delegate TextField= WX.TextCtrl ()
+  type Attribute TextField = WX.Attr (WX.TextCtrl ())
+  type Property TextField = Prop (WX.TextCtrl ())
+  getId (TextField id) = id
+  getDelegate (TextField id) = getWXWidget id >>= \(WXTextField w) -> return w
+  getProperty = getWidgetProperty
+  setProperties w props = addUpdateOp $ setWidgetProperties w props
+  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+
+getTextFieldDelegate :: Integer -> Druid (Delegate TextField)
+getTextFieldDelegate id = getWXWidget id >>= \(WXTextField w) -> return w
+
+createTextField :: Container c => c -> [Property TextField] -> Druid TextField
+createTextField parent props = do
+  id <- getNextId
+  createControlWidget id (getId parent) (\w -> WX.textEntry w props) WXTextField
+  return $ TextField id
+
+textChange :: WX.Event (WXCore.Control a) (IO ())
+textChange = WX.newEvent "textChange" (WXCore.controlGetOnText) (WXCore.controlOnText)
+
+instance TextChangeEventSource TextField where
+  registerTextChangeListener (TextField id) handler = 
+    deferRegisterEventHandler id getTextFieldDelegate textChange (handler $ TextChange id)
 
 ---------------------------------------------------------------
 -- Panel

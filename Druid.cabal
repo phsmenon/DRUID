@@ -54,3 +54,8 @@ executable test-reactive-graphics
   main-is:             reactive-graphics.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-rb-arithmetic
+  main-is:             rb-arithmetic.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random

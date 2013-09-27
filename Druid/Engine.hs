@@ -66,7 +66,7 @@ traceB text (Behavior a0) = f a0 where
   f a = Behavior $ \s -> do (Behavior a', av) <- a s
                             liftIO $ putStrLn $ text ++ (show av)
                             return (f a', av) -- Do not change the age
-							
+                            
 traceE :: Show a => String -> Event a -> Event a
 -- Print event value on the console when it occurs.
 traceE text (Event a0) = f a0 where
@@ -150,11 +150,11 @@ inner (Behavior b) sum tlast = Behavior $ \s@(t, _) -> do
   
 never :: Event a
 never = Event $ const . return $ (never, Nothing)
-											 
+                                             
 stimEvent :: (UIEvent -> Maybe v) -> Event v
 stimEvent fn = f
   where f = Event(\(_, sev) -> return (f, maybe Nothing fn sev))
-											 
+                                             
 -----------------------------------------------------------------
 -- Event Combinators
 -----------------------------------------------------------------
@@ -226,7 +226,7 @@ switch a0 e0 = f a0 e0 where
                                                                 return (f ba' ee', av)
                                                    Nothing -> do (ba', av) <- a s 
                                                                  return (f ba' ee', av)
-												 
+                                                 
 switchLater :: Behavior a -> Event (Druid (Behavior a)) -> Behavior a
 -- Switch to a new behavior *every time* an event occurs
 switchLater a0 e0 = f a0 e0 where

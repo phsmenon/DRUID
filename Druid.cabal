@@ -58,4 +58,4 @@ executable test-reactive-graphics
 executable test-rb-arithmetic
   main-is:             rb-arithmetic.hs
   hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, time, transformers, mtl, random
+  build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random

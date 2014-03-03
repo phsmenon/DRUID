@@ -9,10 +9,8 @@ import Control.Monad.State
 import Control.Monad.IO.Class
 import Data.Time.Clock
 
-import Druid.Types
 import Druid.DruidMonad
-import Druid.Controls (createInternalTimer)
-import qualified Graphics.UI.WX as WX
+--import Druid.Controls (createInternalTimer)
 
 -----------------------------------------------------------------
 -- Some Type Abbreviations
@@ -96,20 +94,19 @@ choose = lift3 (\test i e -> if test then i else e)
 -- Observation
 -----------------------------------------------------------------
 
--- TODO: FIX THIS
 observe :: Behavior a -> Druid (Behavior a)
 -- Create an observing behavior.  Use an IORef to hold the observed
 -- value.  Make the built-in mouse function an observation.
 observe (Behavior a0) = do ref <- liftIO $ newIORef Nothing
                            return $ f ref a0
   where
-    f ref a = Behavior $ \s@(t,_) -> do v <- liftIO $ readIORef ref
-                                        case v of 
-                                          Just (t', res) | t' == t -> return res
-                                          _ -> do (Behavior a', av) <- a s
-                                                  let res = (f ref a', av)
-                                                  liftIO $ writeIORef ref $ Just (t, res)
-                                                  return res
+    f ref a = Behavior $ \s@(Stimulus t) -> do v <- liftIO $ readIORef ref
+                                               case v of 
+                                                 Just (t', res) | t' == t -> return res
+                                                 _ -> do (Behavior a', av) <- a s
+                                                         let res = (f ref a', av)
+                                                         liftIO $ writeIORef ref $ Just (t, res)
+                                                         return res
 
 -----------------------------------------------------------------
 -- Behavior Constructors
@@ -135,11 +132,11 @@ hold v0 (Event a0) = f v0 a0
                                              {-return (f a' (t, val), val)-}
 
 integral :: Vec a => Behavior a -> Behavior a
-integral b = Behavior $ \s@(t, _) ->
+integral b = Behavior $ \s@(Stimulus t) ->
     let Behavior b' = inner b 0 t
     in b' s
 
-inner (Behavior b) sum tlast = Behavior $ \s@(t, _) -> do
+inner (Behavior b) sum tlast = Behavior $ \s@(Stimulus t) -> do
     (b', new) <- b s
     let sum' = sum + ((t - tlast) *^ new)
     return (inner b' sum' t, sum')
@@ -150,10 +147,9 @@ inner (Behavior b) sum tlast = Behavior $ \s@(t, _) -> do
   
 never :: Event a
 never = Event $ const . return $ (never, Nothing)
-                                             
-stimEvent :: (UIEvent -> Maybe v) -> Event v
-stimEvent fn = f
-  where f = Event(\(_, sev) -> return (f, maybe Nothing fn sev))
+
+always :: a -> Event a
+always v = Event $ const . return $ (always v, Just v)
                                              
 -----------------------------------------------------------------
 -- Event Combinators
@@ -170,7 +166,8 @@ mapEs st0 f (Event a0) = f' st0 a0 where
 once :: Event a -> Event a
 -- Make this event fire only once
 once (Event a0) = f a0 False where
-  f a occurred = Event $ \s -> if (occurred) then   -- Don't even bother to age the base event if it has already occurred
+  -- Should not age base even if it has occurred
+  f a occurred = Event $ \s -> if (occurred) then
                                  return (f a True, Nothing)
                                else
                                  a s >>= \(Event a', ev) -> return (f a' (isJust ev), ev)
@@ -259,64 +256,33 @@ accum init a = f a init where
 
 time :: BD
 time = f where
-   f = Behavior (\(t, _) -> return (f, t))
+   f = Behavior (\(Stimulus t) -> return (f, t))
 
 clock :: Double -> Event ()
 -- Create a clock that ticks with the given period
 clock duration = f Nothing where
-  f start = Event $ \(t', _) -> case start of
-                                  Nothing -> return (f (Just t'), Nothing)
-                                  Just t  -> if t' - t > duration then
-                                               return (f (Just t'), Just ())
-                                             else
-                                               return (f start, Nothing)
+  f start = Event $ \(Stimulus t') -> case start of
+                                        Nothing -> return (f (Just t'), Nothing)
+                                        Just t  ->  if t' - t > duration 
+                                                    then
+                                                      return (f (Just t'), Just ())
+                                                    else
+                                                      return (f start, Nothing)
 
+-----------------------------------------------------------------
+-- Guarded Actions
+-----------------------------------------------------------------
 
-
-------------------------------------------------------
--- Reactive Loop
-------------------------------------------------------
-
-stepBehavior :: Behavior (Druid ()) -> UIEvent -> Druid (Behavior (Druid ()))
-stepBehavior (Behavior beh) event = do
-  -- Get the current time value
-  utcTime <- liftIO getCurrentTime
-  let time = realToFrac $ utctDayTime utcTime :: Double
-  -- Perform any pending actions from previous step
-  lastStep <- getTimeStep
-  if lastStep < time then do doOps else return ()
-  -- "Age" the behavior and make sure the side effects execute
-  (beh', op) <- beh (time, Just event)
-  op
-  -- Return the new behavior
-  return beh'
-
-standardEventReceiver :: Druid (UIEvent -> IO())
-standardEventReceiver = do
-  ref <- get >>= return . stepperDataRef 
-  return $ handleEvent ref
-
-handleEvent :: StepperDataRef -> UIEvent -> IO ()
-handleEvent stepperData event = do
-  dta <- readIORef stepperData
-  case dta of 
-    Nothing -> error "Internal error: stepperData should not be NULL inside handleEvent"
-    Just (state, beh) -> do
-      (beh', state') <- runDruid (stepBehavior beh event) state
-      writeIORef stepperData (Just (state', beh'))
-
-
-startEngine :: Druid(Behavior (Druid ())) -> IO ()
-startEngine behavior = do
-  druidData <- initializeDruidData -- behavior
-  -- Get the behavior out of the monad and reify changes immediately
-  let timerAction = standardEventReceiver >>= (createInternalTimer 75)
-  (beh', druidData') <- runDruid (behavior <* doOps <* timerAction) druidData 
-  writeIORef (stepperDataRef druidData') $ Just (druidData', beh')
+reaction :: Event a -> (a -> Druid ()) -> Behavior ()
+reaction e action = f e where
+  f (Event a) = Behavior $ \s -> do (e', ev') <- a s
+                                    maybe (return ()) action ev'
+                                    return (f e', ())
   
----------------------------------------------------------------
+------------------------------------------------------
+-- Lifting standard types
+------------------------------------------------------
 
--- Make most methods in Num reactive
 
 instance Num a => Num (Behavior a) where
   (+)           = lift2 (+)
@@ -336,26 +302,59 @@ instance Fractional a => Fractional (Behavior a)
 
 -- This class represents values that can be scaled
 --
-instance Num (WX.Point) where
-   WX.Point x1 y1 + WX.Point x2 y2  = WX.Point (x1+x2) (y1+y2)
-   WX.Point x1 y1 - WX.Point x2 y2  = WX.Point (x1-x2) (y1-y2)
-   negate (WX.Point x y)      = WX.Point (-x) (-y)
-   (*)                  = error "No * method for WX.Point"
-   abs                  = error "No abs method for WX.Point"
-   signum               = error "No * method for WX.Point"
-   fromInteger 0        = WX.Point 0 0
-   fromInteger _        = error "Only the constant 0 can be used as a WX.Point"
-
 class Num a => Vec a where
   (*^) :: Double -> a -> a
 
 instance Vec Double where
   (*^) = (*)
 
-instance Vec WX.Point where
-  d *^ (WX.Point x y) = WX.Point (round $ d*x') (round $ d*y')
-    where x' = fromIntegral x
-          y' = fromIntegral y
+------------------------------------------------------
+-- Reactive Loop
+------------------------------------------------------
 
-p2 :: Behavior Int -> Behavior Int -> Behavior (WX.Point)
-p2 = lift2 WX.point
+stepBehavior :: Stimulus -> Behavior a -> Druid (Behavior a, a)
+stepBehavior st (Behavior f) = f st
+
+-- This is a bit strange because of 2 things:
+--   1. Events can evolve (though that had be somewhat odd)
+--   2. Reactors, while executing, can add other reactors
+runReactors :: Stimulus -> Druid ()
+runReactors st = do
+  current <- getReactors 
+  clearReactors
+  next' <- mapM (\r -> stepBehavior st r >>= return . fst) current
+  addReactors next'
+
+-- Take a single step with the engine
+stepEngine :: Stimulus -> Druid ()
+stepEngine st = do
+  updateAllReactives >>  runReactors st >>  doDeferredOps >> updateAllReactives
+  where
+    updateAllReactives = getReactives >>= mapM_ (\(AnyReactive r) -> updateAttributes st r)
+
+-- Version of engine stepping that can be called from an IO monad
+stepEngineIO :: StepperDataRef -> IO ()
+stepEngineIO ref = do
+  dta <- readIORef ref
+  case dta of 
+    Nothing -> error "Internal error: stepperData should not be NULL inside handleEvent"
+    Just st -> do
+      (_, st') <- runDruid doStep st
+      writeIORef ref (Just st')
+  where
+    doStep = makeStimulus >>= stepEngine
+    makeStimulus = do
+      utcTime <- liftIO getCurrentTime
+      let tm = realToFrac $ utctDayTime utcTime :: Double
+      return $ Stimulus tm
+
+-- Engine startup. Performes some bootstrapping
+startEngine :: Druid() -> IO ()
+startEngine startup = do
+  druidData <- initializeDruidData
+  let ref = stepperDataRef druidData
+  let druidData' = druidData { reactors = [initialAction] }
+  writeIORef ref $ Just druidData'
+  stepEngineIO $ stepperDataRef druidData'
+  where
+    initialAction = reaction (once $ always ()) (\_ -> startup)

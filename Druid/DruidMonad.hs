@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances, ExistentialQuantification #-}
+{-# LANGUAGE StandaloneDeriving, DeriveDataTypeable, TypeFamilies #-}
 
 module Druid.DruidMonad where
 
@@ -11,6 +12,8 @@ import Data.Maybe
 import Debug.Trace
 import Data.IORef
 
+import Data.Typeable
+
 import qualified Graphics.UI.WX as WX  hiding ((:=))
 import Graphics.UI.WX(Prop((:=)))
 
@@ -20,128 +23,91 @@ import qualified Druid.WXExtensions as WXExt
 -- Data Types for the Engine
 ------------------------------------------------------------------
 
-type Stimulus = (Double, Maybe UIEvent)
+data Stimulus = Stimulus Double
 
 data Behavior a = Behavior (Stimulus -> Druid (Behavior a, a))
 
 data Event a = Event (Stimulus -> Druid (Event a, Maybe a))
 
+------------------------------------------------------------------
+
+class ReactiveProxy w where
+  type Attribute w :: * -> *
+  type CreateAttr w :: *
+  getName :: w -> Druid String
+  create  :: CreateAttr w -> Druid w
+  getAttr :: Typeable a => w -> Attribute w a -> Druid (Behavior a)
+  setAttr :: Typeable a => w -> Attribute w a -> Behavior a -> Druid ()
+  -- removeObject :: w -> Druid ()
+  react   :: w -> Event e -> (w -> e -> Druid ()) -> Druid ()
+
+class ReactiveProxy w => ReactiveWidget w where
+  updateAttributes :: Stimulus -> w -> Druid () 
+
+data AnyReactive= forall a. ReactiveWidget a => AnyReactive a
 
 ------------------------------------------------------------------
 
-data WXWidget = 
-    WXFrame (WX.Frame ())
-  | WXButton (WX.Button ())
-  | WXLabel (WX.StaticText ())
-  | WXTextField (WX.TextCtrl ())
-  | WXPanel (WX.Panel ())
-  | WXSpin (WX.SpinCtrl ())
-  | WXRectangle WXExt.Rectangle
-  | WXEllipse WXExt.Ellipse
-
-data WXWindow = forall a. WXWindow (WX.Window a)
-  
-type Tag = String
-
-type WidgetDelegatePair = (Maybe Tag, (Integer, WXWidget))
-
-data UIEvent = 
-  Heartbeat 
-  | Command Integer
-  | Select Integer 
-  | Resize Integer
-  | TextChange Integer
-  deriving (Eq, Show)
-
 data DruidData = DruidData { 
-    widgets :: [WidgetDelegatePair], 
+    widgets :: [AnyReactive], 
     maxId :: Integer, 
-    createOps, updateOps, removeOps :: [Druid ()],
+    updateOps :: [Druid ()],
     stepperDataRef :: StepperDataRef,
-    timeStep :: Double
+    reactors :: [Behavior ()]
 }
 
-type StepperDataRef = IORef (Maybe (DruidData, Behavior (Druid ())))
+type StepperDataRef = IORef (Maybe (DruidData))
 
 instance Show DruidData where
-  show r = let sWidgets = "Ids: " ++ (intercalate "," $ map (show.fst) $ widgets r) in
-           let sMaxId = "Max Id: " ++ (show $ maxId r) in
-           let sCreateOps = "Create op counts: " ++ (show . length $ createOps r) in
+  show r = let sWidgets = "Widget count: " ++ (show . length $ widgets r) in
+           {-let sReactives = "Reactives Count: " ++ (show .length $ reactives r) in-}
            let sUpdateOps = "Update op counts: " ++ (show . length $ updateOps r) in
-           let sRemoveOps = "Remove op counts: " ++ (show . length $ removeOps r) in
-           let sLastTimeStep = "Last time step: " ++ (show $ timeStep r) in
-           "{ " ++ intercalate ", " [sWidgets, sMaxId, sLastTimeStep, sCreateOps, sUpdateOps, sRemoveOps] ++ " }" 
+           let sReactors = "Reactor Count: " ++ (show . length $ reactors r) in
+           {-let sLastTimeStep = "Last time step: " ++ (show $ timeStep r) in-}
+           "{ " ++ intercalate ", " [  sWidgets,  {-sReactives,-} {- sLastTimeStep, ,-} sUpdateOps, sReactors] ++ " }" 
 
  
 type Druid = StateT DruidData IO
 
+------------------------------------------------------------------
 
 initializeDruidData :: IO DruidData
 initializeDruidData = do
   ref <- newIORef Nothing
-  return $ DruidData { widgets = [], maxId = 1, timeStep = 0, createOps = [], updateOps = [], removeOps = [], stepperDataRef = ref}
+  return $ DruidData { widgets = [], maxId = 1, {-timeStep = 0,-} updateOps = [], stepperDataRef = ref, reactors = []}
 
-getNextId :: Druid Integer
-getNextId = get >>= \r@DruidData { maxId = id } -> put r { maxId = id + 1 } >> return id
-  
-getTimeStep :: Druid Double
-getTimeStep = get >>= \r -> return $ timeStep r
+addReactive :: ReactiveWidget w => w -> Druid ()
+addReactive w = get >>= \r -> put r { widgets = (AnyReactive w):(widgets r) }
 
-putTimeStep :: Double -> Druid ()
-putTimeStep time = get >>= \r -> put r { timeStep = time }
+getReactives :: Druid [AnyReactive]
+getReactives = get >>= \r -> return $ widgets r
 
-addCreateOp :: Druid () -> Druid ()
-addCreateOp op = get >>= \r@DruidData { createOps = ops } -> put r { createOps = ops ++ [op] }
+deferUpdateOp :: Druid () -> Druid ()
+deferUpdateOp update = get >>= \r -> put r { updateOps = update:(updateOps r) }
 
-addUpdateOp :: Druid () -> Druid ()
-addUpdateOp op = get >>= \r@DruidData { updateOps = ops } -> put r { updateOps = ops ++ [op] }
-  
-addRemoveOp :: Druid () -> Druid ()
-addRemoveOp op = get >>= \r@DruidData { removeOps = ops } -> put r { removeOps = ops ++ [op] }
+doDeferredOps :: Druid ()
+doDeferredOps = get >>= \r -> return (updateOps r) >>= sequence_ >> put r { updateOps = [] }
 
-clearCreateOps :: Druid ()
-clearCreateOps = get >>= \r -> put r { createOps = [] }
+getStepperDataRef :: Druid StepperDataRef
+getStepperDataRef = get >>= return . stepperDataRef
 
-clearUpdateOps :: Druid ()
-clearUpdateOps = get >>= \r -> put r { updateOps = [] }
+getReactors :: Druid [Behavior ()]
+getReactors = get >>= \r -> return $ reactors r
 
-clearRemoveOps :: Druid ()
-clearRemoveOps = get >>= \r -> put r { removeOps = [] }
+clearReactors :: Druid ()
+clearReactors = get >>= \r -> put r { reactors = [] }
 
-storeDelegate :: Integer -> WXWidget -> Druid ()
-storeDelegate id widget = get >>= \r@DruidData { widgets = lst } -> 
-    put r { widgets = (Nothing, (id,widget)):lst }
+addReactors :: [Behavior ()] -> Druid ()
+addReactors rs = get >>= \r -> put r { reactors = (reactors r) ++ rs }
 
-storeDelegateTag :: Tag -> Integer -> WXWidget -> Druid ()
-storeDelegateTag tag id widget = get >>= \r@DruidData { widgets = lst } -> 
-    put r { widgets = (Just tag, (id,widget)):lst }
+traceDruidData :: Druid ()
+traceDruidData = get >>= liftIO . traceIO . show
 
-getWXWidget :: Integer -> Druid WXWidget 
-getWXWidget id = do 
-  r@DruidData { widgets = wlist } <- get
-  let res = find (\w -> (fst $ snd w) == id) wlist
-  case res of 
-    Nothing          -> traceStack "" $ error ("Object with id " ++ show id ++ " not in list.")
-    Just (_, (_, w)) -> return w
-
-getWidgetsByTag :: Tag -> Druid [WXWidget]
-getWidgetsByTag tag = do
-  r@DruidData { widgets = wlist } <- get
-  let res = map (\w -> snd . snd $ w) $ filter (\w -> maybe False (== tag) $ fst w) wlist
-  case res of 
-    [] -> traceStack "" $ error ("Objects with tag " ++ show tag ++ " not in list.")
-    xs -> return xs
-
-getWXWindow :: Integer -> Druid WXWindow 
-getWXWindow id = do
-  widget <- getWXWidget id
-  return $ case widget of
-             WXFrame w -> WXWindow w
-             WXLabel w -> WXWindow w
-             WXButton w -> WXWindow w
-             WXPanel w -> WXWindow w
-             WXSpin w -> WXWindow w
-             _        -> error "Not a WX.Window"
+traceDruidDataMsg :: String -> Druid ()
+traceDruidDataMsg msg = do
+  text <- get >>= return . show 
+  let text' = msg ++ text
+  liftIO $ traceIO text'
 
 runDruid :: Druid a -> DruidData -> IO (a, DruidData)
 runDruid = runStateT 
@@ -149,14 +115,3 @@ runDruid = runStateT
 execDruid :: Druid () -> DruidData -> IO DruidData
 execDruid = execStateT
 
-doOps :: Druid ()
-doOps = do
-  DruidData { createOps = cOps, updateOps = uOps, removeOps = rOps } <- get
-  -- get >>= \x -> liftIO $ traceIO (show x)
-  -- liftIO $ traceIO ("To create: " ++ (show $ length $ cOps ++ uOps ++ rOps))
-  sequence_ $ cOps ++ uOps ++ rOps
-  clearCreateOps >> clearUpdateOps >> clearRemoveOps
-  -- get >>= \x -> liftIO $ traceIO (show x)
-
-
----------------------------------------------------------------

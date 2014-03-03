@@ -1,9 +1,11 @@
-{-# LANGUAGE TypeFamilies, ExistentialQuantification, RankNTypes, ConstraintKinds, FlexibleContexts, UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies, ExistentialQuantification, ConstraintKinds, FlexibleContexts #-}
+{-# LANGUAGE StandaloneDeriving, DeriveDataTypeable, RankNTypes #-}
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
 module Druid.Controls where
 
 import qualified Graphics.UI.WX as WX  hiding ((:=))
-import Graphics.UI.WX(Prop((:=)), Attr(..))
+import Graphics.UI.WX(Prop((:=)))
 
 import qualified Graphics.UI.WXCore as WXCore
 
@@ -11,330 +13,282 @@ import qualified Druid.WXExtensions as WXExt
 
 import Control.Monad.IO.Class
 
+import Druid.Engine
 import Druid.DruidMonad
+
+import System.Random
+import Data.IORef 
+import System.IO.Unsafe
+
+import Data.List
+import Data.Maybe
+import Data.Dynamic
+import Control.Applicative
+import qualified Data.HashTable.IO as H
 
 import Debug.Trace
 
----------------------------------------------------------------
--- Types Ahoy
----------------------------------------------------------------
+-------------------------------------------------------------------------------------------------
 
-class (Property w ~ Prop (Delegate w), Attribute w ~ Attr (Delegate w)) => Widget w where
-  type Delegate w :: *
-  type Attribute w :: * -> *
-  type Property w :: *
-  getId :: w -> Integer
-  getDelegate :: w -> Druid (Delegate w)
-  getProperty :: w -> Attribute w a -> Druid a
-  setProperties :: w -> [Property w] -> Druid ()
-  setProperty :: w -> Property w -> Druid ()
-  setProperty w prop = setProperties w [prop]
-  remove :: w -> Druid ()
+instance Num (WX.Point) where
+   WX.Point x1 y1 + WX.Point x2 y2  = WX.Point (x1+x2) (y1+y2)
+   WX.Point x1 y1 - WX.Point x2 y2  = WX.Point (x1 - x2) (y1 - y2)
+   negate (WX.Point x y)      = WX.Point (-x) (-y)
+   (*)                  = error "No * method for WX.Point"
+   abs                  = error "No abs method for WX.Point"
+   signum               = error "No * method for WX.Point"
+   fromInteger 0        = WX.Point 0 0
+   fromInteger _        = error "Only the constant 0 can be used as a WX.Point"
 
-class (Widget w, WXExt.GraphicsContainer (GraphicsContainerDelegate w)) => Container w where
-  type GraphicsContainerDelegate w :: *
-  getContainerDelegate :: w -> Druid (Delegate w)
-  getGraphicsContainer :: w -> Druid (GraphicsContainerDelegate w)
+instance Vec WX.Point where
+  d *^ (WX.Point x y) = WX.Point (round $ d*x') (round $ d*y')
+    where x' = fromIntegral x
+          y' = fromIntegral y
 
-  getContainerDelegate = getDelegate
+p2 :: Behavior Int -> Behavior Int -> Behavior (WX.Point)
+p2 = lift2 WX.point
 
-class Widget w => CommandEventSource w where
-  registerCommandListener :: w -> (UIEvent -> IO ()) -> Druid ()
+------------------------------------------------------------------------------------------------------------
 
-class Widget w => SelectEventSource w where
-  registerSelectListener :: w -> (UIEvent -> IO ()) -> Druid ()
+deriving instance Typeable1 Behavior  -- Slightly unfortunate that this is required
 
-class Widget w => ResizeEventSource w where
-  registerResizeListener :: w -> (UIEvent -> IO ()) -> Druid ()
+data CachedProperty a = Typeable a => CachedProperty (Maybe (Double, a)) (Maybe (Behavior a))
 
-class Widget w => TextChangeEventSource w where
-  registerTextChangeListener :: w -> (UIEvent -> IO ()) -> Druid ()
+data AnyCachedProperty = forall a. Typeable a => AnyCachedProperty (Maybe (Double, a)) (Maybe (Behavior a))
 
----------------------------------------------------------------
--- Frame
----------------------------------------------------------------
-
-data Frame = Frame Integer
-
-instance Widget Frame where
-  type Delegate Frame = WX.Frame ()
-  type Attribute Frame = WX.Attr (WX.Frame ())
-  type Property Frame = Prop (WX.Frame ())
-  getId (Frame id) = id
-  getDelegate (Frame id) = getWXWidget id >>= \(WXFrame w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
-
-instance Container Frame where
-  type GraphicsContainerDelegate Frame = WX.Frame ()
-  getGraphicsContainer = getDelegate
-
-instance ResizeEventSource Frame where
-  registerResizeListener (Frame id) handler = 
-    deferRegisterEventHandler id getFrameDelegate WX.resize (handler $ Resize id)
-
-getFrameDelegate :: Integer -> Druid (Delegate Frame)
-getFrameDelegate id = getWXWidget id >>= \(WXFrame w) -> return w
-
-createFrame :: [Property Frame] -> Druid Frame
-createFrame props = do
-  id <- getNextId 
-  {-createTopLevelWidget id (WX.frame props) WXFrame-}
-  createTopLevelWidget id (WXExt.createFrame props) WXFrame
-  return $ Frame id
+type PropertyCache = H.BasicHashTable String AnyCachedProperty
 
 
----------------------------------------------------------------
--- Label
----------------------------------------------------------------
+toCachedProperty :: Typeable a => AnyCachedProperty -> CachedProperty a
+toCachedProperty (AnyCachedProperty cc beh) = CachedProperty (fromJust $ gcast cc) (fromJust $ gcast beh)
 
-data Label = Label Integer
+getFromCache :: Typeable a => PropertyCache -> WX.Attr w a -> Druid (Maybe (CachedProperty a))
+getFromCache cache attr =
+    liftIO $ H.lookup cache (WX.attrName attr) >>= return . toMaybeCachedProperty
+    
 
-instance Widget Label where
-  type Delegate Label = WX.StaticText ()
-  type Attribute Label = WX.Attr (WX.StaticText ())
-  type Property Label = Prop (WX.StaticText ())
-  getId (Label id) = id
-  getDelegate (Label id) = getWXWidget id >>= \(WXLabel w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+toMaybeCachedProperty :: Typeable a => Maybe AnyCachedProperty -> Maybe (CachedProperty a)
+toMaybeCachedProperty = maybe Nothing (Just . toCachedProperty) 
+    
+getFromCacheWithDefault :: Typeable a => PropertyCache -> WX.Attr w a -> CachedProperty a -> Druid (CachedProperty a)
+getFromCacheWithDefault cache attr def = getFromCache cache attr >>= maybe (return def) return
+    
+updateCache :: Typeable a => PropertyCache -> WX.Attr w a -> CachedProperty a -> Druid ()
+updateCache cache attr (CachedProperty cp beh) = liftIO $ H.insert cache (WX.attrName attr) (AnyCachedProperty cp beh)
 
-createLabel :: Container c => c -> [Property Label] -> Druid Label
-createLabel parent props = do
-  id <- getNextId
-  createControlWidget id (getId parent) (\w -> WX.staticText w props) WXLabel
-  return $ Label id
+updateAssociatedBehavior :: Typeable a => PropertyCache -> WX.Attr w a -> Behavior a -> Druid ()
+updateAssociatedBehavior cache attr beh = do
+    CachedProperty cv _ <- getFromCacheWithDefault cache attr (CachedProperty Nothing Nothing)
+    -- traceDruidDataMsg $ "Updating behavior: "
+    updateCache cache attr $ CachedProperty cv (Just beh)
 
----------------------------------------------------------------
--- Button
----------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
 
-data Button = Button Integer
-  
-instance Widget Button where
-  type Delegate Button = WX.Button ()
-  type Attribute Button = WX.Attr (WX.Button ())
-  type Property Button = Prop (WX.Button ())
-  getId (Button id) = id
-  getDelegate (Button id) = getWXWidget id >>= \(WXButton w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+data AnyAttributeBehavior = forall a. Typeable a => AnyAttributeBehavior (Behavior a)
 
-getButtonDelegate :: Integer -> Druid (Delegate Button)
-getButtonDelegate id = getWXWidget id >>= \(WXButton w) -> return w
+type AttributeBehaviorCache = H.BasicHashTable String AnyAttributeBehavior
 
 
-instance CommandEventSource Button where
-  registerCommandListener (Button id) handler = 
-    deferRegisterEventHandler id getButtonDelegate WX.command (handler $ Command id)
+getOrAddBehavior :: Typeable a => AttributeBehaviorCache -> WX.Attr w a -> Behavior a -> Druid (Behavior a)
+getOrAddBehavior cc attr beh = do
+  liftIO $ H.lookup cc name >>= maybe doInsert (\(AnyAttributeBehavior v) -> return . fromJust . cast $ v)
+  where
+    name = WX.attrName attr
+    doInsert = H.insert cc name (AnyAttributeBehavior beh) >> return beh
 
-createButton :: Container c => c -> [Property Button] -> Druid Button
-createButton parent props = do
-  id <- getNextId
-  createControlWidget id (getId parent) (\w -> WX.button w props) WXButton
-  return $ Button id
+processAttributeBehaviors :: AttributeBehaviorCache -> (forall a. Behavior a -> Druid ()) -> Druid ()
+processAttributeBehaviors cache fn = do
+  ab <- liftIO $ H.toList cache >>= return . map snd
+  -- liftIO . traceIO $ "Am processing cached attribute behaviors: " ++ (show . length $ ab)
+  sequence_ $ map (\(AnyAttributeBehavior v) -> fn v) ab
 
----------------------------------------------------------------
--- Text Field
----------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------
 
-data TextField = TextField Integer
-  
-instance Widget TextField where
-  type Delegate TextField= WX.TextCtrl ()
-  type Attribute TextField = WX.Attr (WX.TextCtrl ())
-  type Property TextField = Prop (WX.TextCtrl ())
-  getId (TextField id) = id
-  getDelegate (TextField id) = getWXWidget id >>= \(WXTextField w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+makeAttributeBehavior :: Typeable a => w -> PropertyCache -> WX.Attr w a -> Behavior a
+makeAttributeBehavior w cache attr = Behavior f where
+    f s@(Stimulus t) = do
+        CachedProperty cv beh <- getFromCacheWithDefault cache attr (CachedProperty Nothing Nothing)
+        {-liftIO . traceIO $ "In behavior update: " ++ (show t)-}
+        if (isJust cv && fst (fromJust cv) == t) 
+            then do
+                {-liftIO . traceIO $ "Returning cached behavior"-}
+                return $ (Behavior f, fromJust . cast $ snd (fromJust cv))
+            else do
+                {-liftIO . traceIO $ "Not in cached behavior"-}
+                value <- if (isJust beh) 
+                            then executeBehavior w attr (fromJust beh) s 
+                            else defaultBehavior w attr s
+                return (Behavior f, value)
+    attributeName = WX.attrName attr
+    executeBehavior :: Typeable a => w -> WX.Attr w a -> (Behavior a) -> Stimulus -> Druid a
+    executeBehavior w attr beh s@(Stimulus t) = do
+        {-liftIO . traceIO $ "Executing behavior"-}
+        (newBeh, av) <- stepBehavior s beh
+        liftIO $ WX.set w [attr := av]  -- Write back to control
+        liftIO $ H.insert cache attributeName (AnyCachedProperty (Just (t, av)) (Just newBeh)) --Update Beh
+        return av
+    defaultBehavior :: Typeable a => w -> WX.Attr w a -> Stimulus -> Druid a
+    defaultBehavior w attr (Stimulus t) = do
+        {-liftIO . traceIO $ "Doing Default Behavior"-}
+        value <- liftIO $ WX.get w attr
+        liftIO $ H.insert cache attributeName (AnyCachedProperty (Just (t, value)) Nothing) -- Update Beh
+        return value            
 
-getTextFieldDelegate :: Integer -> Druid (Delegate TextField)
-getTextFieldDelegate id = getWXWidget id >>= \(WXTextField w) -> return w
+------------------------------------------------------------------------------------------------------------
 
-createTextField :: Container c => c -> [Property TextField] -> Druid TextField
-createTextField parent props = do
-  id <- getNextId
-  createControlWidget id (getId parent) (\w -> WX.textEntry w props) WXTextField
-  return $ TextField id
+data AnyWXWindow = forall a. AnyWXWindow (WX.Window a)
 
-textChange :: WX.Event (WXCore.Control a) (IO ())
-textChange = WX.newEvent "textChange" (WXCore.controlGetOnText) (WXCore.controlOnText)
+class Container w where
+  getWXWindow :: w -> AnyWXWindow 
 
-instance TextChangeEventSource TextField where
-  registerTextChangeListener (TextField id) handler = 
-    deferRegisterEventHandler id getTextFieldDelegate textChange (handler $ TextChange id)
+data AnyContainer = forall w. Container w => AnyContainer w
 
----------------------------------------------------------------
--- Panel
----------------------------------------------------------------
+instance Container AnyContainer  where
+  getWXWindow (AnyContainer c) = getWXWindow c
 
-data Panel = Panel Integer
+-------------------------------------------------------------------------------------------------
 
-instance Widget Panel where
-  type Delegate Panel = WX.Panel ()
-  type Attribute Panel = WX.Attr (WX.Panel ())
-  type Property Panel = Prop (WX.Panel ())
-  getId (Panel id) = id
-  getDelegate (Panel id) = getWXWidget id >>= \(WXPanel w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+createWindow :: ReactiveWidget a => IO a -> Druid a
+createWindow constructor = liftIO constructor >>= \w -> addReactive w >> return w
 
-instance Container Panel where
-  type GraphicsContainerDelegate Panel = WX.Panel ()
-  getGraphicsContainer = getDelegate
+updateAllAttributes :: Stimulus -> AttributeBehaviorCache -> Druid ()
+updateAllAttributes st cc = processAttributeBehaviors cc (\v -> stepBehavior st v >> return ())
 
-instance ResizeEventSource Panel where
-  registerResizeListener (Panel id) handler = 
-    deferRegisterEventHandler id getPanelDelegate WX.resize (handler $ Resize id)
+standardEventReceiver :: WXEvent -> Druid(IO ())
+standardEventReceiver ev = do
+  ref <- getStepperDataRef
+  return $ addEvent ev >> {- liftIO (traceIO "Event handling") >> -} stepEngineIO ref >> popEvent
 
-getPanelDelegate :: Integer -> Druid (Delegate Panel)
-getPanelDelegate id = getWXWidget id >>= \(WXPanel w) -> return w
+-------------------------------------------------------------------------------------------------
 
-createPanel :: Container c => c -> [Property Panel] -> Druid Panel
-createPanel parent props = do
-  id <- getNextId
-  createControlWidget id (getId parent) (\w -> WXExt.createPanel w props) WXPanel
-  return $ Panel id
-  
----------------------------------------------------------------
--- Spin Control
----------------------------------------------------------------
+-- Crude. Will be fixed with factorizing Druid
+eventQueue :: IORef [WXEvent]
+{-# NOINLINE eventQueue #-}
+eventQueue = unsafePerformIO $ newIORef []
 
-data Spin = Spin Integer
+addEvent :: WXEvent -> IO ()
+addEvent ev = modifyIORef eventQueue (++ [ev])
 
-instance Widget Spin where
-  type Delegate Spin = WX.SpinCtrl ()
-  type Attribute Spin = WX.Attr (WX.SpinCtrl ())
-  type Property Spin = Prop (WX.SpinCtrl ())
-  getId (Spin id) = id
-  getDelegate (Spin id) = getWXWidget id >>= \(WXSpin w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = addRemoveOp $ setWidgetProperties w [WX.visible := False]
+popEvent :: IO ()
+popEvent = modifyIORef eventQueue tail
 
-createSpin :: Container c => c -> Integer -> Integer -> [Property Spin] -> Druid Spin
-createSpin parent min max props = do
-  id <- getNextId
-  let (iMin, iMax) = (fromIntegral min, fromIntegral max)
-  createControlWidget id (getId parent) (\w -> WX.spinCtrl w iMin iMax props) WXSpin
-  return $ Spin id  
+getLatestEvent :: Druid (Maybe WXEvent)
+getLatestEvent = liftIO $ readIORef eventQueue >>= \q -> if null q then return Nothing else return $ Just (head q)
 
-getSpinDelegate :: Integer -> Druid (Delegate Spin)
-getSpinDelegate id = getWXWidget id >>= \(WXSpin w) -> return w
+-------------------------------------------------------------------------------------------------
 
+data WXEvent = WXCommand Int
+  deriving Eq
 
-instance SelectEventSource Spin where
-  registerSelectListener (Spin id) handler = 
-    deferRegisterEventHandler id getSpinDelegate WX.select (handler $ Select id)
+class CommandEventSource w where
+  onCommand :: w -> Druid (Event ())
 
----------------------------------------------------------------
--- Rectangle
----------------------------------------------------------------
+fromWXEvent :: (WXEvent -> Maybe v) -> Event v
+fromWXEvent fn = f
+  where f = Event(\_ -> getLatestEvent  >>= \ev -> return (f, maybe Nothing fn ev))
 
-data Rectangle = Rectangle Integer
+-------------------------------------------------------------------------------------------------
 
-instance Widget Rectangle where
-  type Delegate Rectangle = WXExt.Rectangle
-  type Attribute Rectangle = WX.Attr WXExt.Rectangle
-  type Property Rectangle = Prop WXExt.Rectangle
-  getId (Rectangle id) = id
-  getDelegate (Rectangle id) = getWXWidget id >>= \(WXRectangle w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = return () -- TODO: addRemoveOp $ setWidgetProperties w [WX.visible := False]
+data WXFrame = WXFrame (WX.Frame ()) AttributeBehaviorCache PropertyCache
 
-createRectangle :: Container c => c -> [Property Rectangle] -> Druid Rectangle
-createRectangle parent props = do
-  id <- getNextId
-  createGraphicalWidget id parent (\w -> WXExt.createRectangle w props) WXRectangle
-  return $ Rectangle id  
+instance Container WXFrame where
+  getWXWindow (WXFrame w _ _) = AnyWXWindow w
 
-getRectangleDelegate :: Integer -> Druid (Delegate Rectangle)
-getRectangleDelegate id = getWXWidget id >>= \(WXRectangle w) -> return w
+instance ReactiveProxy WXFrame where
+  type Attribute WXFrame = WX.Attr (WX.Frame ())
+  type CreateAttr WXFrame = ()
+  getName (WXFrame w _ _) = liftIO $ WX.get w WX.identity >>= return . show
+  getAttr (WXFrame w cc cc') attr = getOrAddBehavior cc attr $ makeAttributeBehavior w cc' attr
+  setAttr f@(WXFrame _ _ cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr f attr >> return ()
+  create _ = createWindow $ WXFrame <$> WXExt.createFrame [] <*> H.new <*> H.new
+  react w ev reactor = addReactors [reaction ev (reactor w)]
 
----------------------------------------------------------------
--- Circle
----------------------------------------------------------------
+instance ReactiveWidget WXFrame where
+  updateAttributes st (WXFrame _ cc _) = updateAllAttributes st cc
 
-data Ellipse = Ellipse Integer
+createWXFrame :: Druid WXFrame
+createWXFrame = create ()
 
-instance Widget Ellipse where
-  type Delegate Ellipse = WXExt.Ellipse
-  type Attribute Ellipse = WX.Attr WXExt.Ellipse
-  type Property Ellipse = Prop WXExt.Ellipse
-  getId (Ellipse id) = id
-  getDelegate (Ellipse id) = getWXWidget id >>= \(WXEllipse w) -> return w
-  getProperty = getWidgetProperty
-  setProperties w props = addUpdateOp $ setWidgetProperties w props
-  remove w = return () -- TODO: addRemoveOp $ setWidgetProperties w [WX.visible := False]
+-------------------------------------------------------------------------------------------------
 
-createEllipse :: Container c => c -> [Property Ellipse] -> Druid Ellipse
-createEllipse parent props = do
-  id <- getNextId
-  createGraphicalWidget id parent (\w -> WXExt.createEllipse w props) WXEllipse
-  return $ Ellipse id  
+data WXButton = WXButton (WX.Button ()) Int AttributeBehaviorCache PropertyCache
 
-getEllipseDelegate :: Integer -> Druid (Delegate Ellipse)
-getEllipseDelegate id = getWXWidget id >>= \(WXEllipse w) -> return w
+instance ReactiveProxy WXButton where
+  type Attribute WXButton = WX.Attr (WX.Button ())
+  type CreateAttr WXButton = AnyContainer
+  getName (WXButton w _ _ _) = liftIO $ WX.get w WX.identity >>= return . show
+  getAttr (WXButton w _ cc cc') attr = getOrAddBehavior cc attr $ makeAttributeBehavior w cc' attr
+  setAttr b@(WXButton w _ cc cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr b attr >> return ()
+  create (AnyContainer parent) = do
+    AnyWXWindow w <- return $ getWXWindow parent
+    button <- liftIO $ WX.button w []
+    buttonId <- liftIO $ WX.get button WX.identity
+    attrCache <- liftIO $ H.new
+    connCache <- liftIO $ H.new
+    createWindow . return $ WXButton button buttonId attrCache connCache
+  react w ev reactor = addReactors [reaction ev (reactor w)]
 
----------------------------------------------------------------
--- Internal Timer
----------------------------------------------------------------
-  
-createInternalTimer :: Integer -> (UIEvent -> IO ()) -> Druid ()
-createInternalTimer time callback = do
-  f <- liftIO $ WX.frame  [WX.text := "Internal Window for Timer", WX.visible := False]
-  liftIO $ WX.timer f [WX.interval := (fromIntegral time), WX.on WX.command := callback Heartbeat]
-  return ()
-  
----------------------------------------------------------------
--- Helper Functions
----------------------------------------------------------------
+instance ReactiveWidget WXButton where
+  updateAttributes st (WXButton _ _ cc _) = updateAllAttributes st cc
 
-deferRegisterEventHandler :: b -> (b -> Druid w) -> WX.Event w a -> a -> Druid ()
-deferRegisterEventHandler id lookup event handler = do
-  let action wxobj = WX.set wxobj [WX.on event := handler]
-  addUpdateOp $ lookup id >>= \v -> liftIO $ action v
+instance CommandEventSource WXButton where
+  onCommand (WXButton button buttonId _ _) = registerListener >> return (fromWXEvent eventFilter)
+    where
+      registerListener = eventTransformer >>= \fn -> liftIO $ WX.set button [WX.on WX.command := fn]
+      eventTransformer = standardEventReceiver $ WXCommand buttonId
+      eventFilter (WXCommand id') | buttonId == id' = Just ()
+      eventFilter _ = Nothing
+    
+createWXButton :: Container c => c -> Druid WXButton
+createWXButton parent = create (AnyContainer parent)
 
---deferRegisterEventHandler :: Widget w => w -> 
-  
-createTopLevelWidget :: Integer -> IO a -> (a -> WXWidget) -> Druid ()
-createTopLevelWidget id delegate wrapper = addCreateOp $ do
-  w <- liftIO delegate
-  storeDelegate id (wrapper w)
-  
-createControlWidget :: Integer -> Integer -> (forall b. WX.Window b -> IO a) -> (a -> WXWidget) -> Druid ()
-createControlWidget id parent delegate wrapper = addCreateOp $ do
-  WXWindow w <- getWXWindow parent
-  w <- liftIO $ delegate w
-  storeDelegate id (wrapper w)  
+-------------------------------------------------------------------------------------------------
 
-createGraphicalWidget :: (Container c) => Integer ->  c -> (forall w. WXExt.GraphicsContainer w => w -> IO a) -> (a -> WXWidget) -> Druid ()
-createGraphicalWidget id parent delegate wrapper = addCreateOp $ do
-  WXExt.AnyGraphicsContainer w <- getGraphicalContainer parent
-  g <- liftIO $ delegate w
-  storeDelegate id (wrapper g)  
+data WXLabel = WXLabel (WX.StaticText ()) AttributeBehaviorCache PropertyCache
 
-setWidgetProperties :: Widget w => w -> [Property w] -> Druid ()
-setWidgetProperties widget props = do
-  wxObj <- getDelegate widget
-  liftIO $ WX.set wxObj props
+instance ReactiveProxy WXLabel where
+  type Attribute WXLabel = WX.Attr (WX.StaticText ())
+  type CreateAttr WXLabel = AnyContainer
+  getName (WXLabel w  _ _) = liftIO $ WX.get w WX.identity >>= return . show
+  getAttr (WXLabel w cc cc') attr = getOrAddBehavior cc attr $ makeAttributeBehavior w cc' attr
+  setAttr l@(WXLabel _ _ cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr l attr >> return ()
+  create (AnyContainer parent) = do
+    AnyWXWindow w <- return $ getWXWindow parent
+    createWindow $ WXLabel <$> WX.staticText w [] <*> H.new <*> H.new
+  react w ev reactor = addReactors [reaction ev (reactor w)]
 
-getWidgetProperty :: Widget w => w -> Attribute w a -> Druid a
-getWidgetProperty widget attr = do
-  wxObj <- getDelegate widget
-  liftIO $ WX.get wxObj attr
+instance ReactiveWidget WXLabel where
+  updateAttributes st (WXLabel _ cc _) = updateAllAttributes st cc
 
-getGraphicalContainer :: Widget w => w -> Druid WXExt.AnyGraphicsContainer
-getGraphicalContainer widget = do
-  wxwidget <- getWXWidget $ getId widget
-  return $ case wxwidget of
-             WXFrame w -> WXExt.AnyGraphicsContainer w
-             WXPanel w -> WXExt.AnyGraphicsContainer w
-             _         -> error "Not a graphics container"
+createWXLabel :: Container c => c -> Druid WXLabel
+createWXLabel parent = create (AnyContainer parent)
+
+-------------------------------------------------------------------------------------------------
+
+data WXTimer = WXTimer (WX.Timer) Int AttributeBehaviorCache PropertyCache
+
+instance ReactiveProxy WXTimer where
+  type Attribute WXTimer = WX.Attr (WX.Timer)
+  type CreateAttr WXTimer = (AnyContainer, Int)
+  getName (WXTimer _ wid _ _) = return $ show wid
+  getAttr (WXTimer w _ cc cc') attr = getOrAddBehavior cc attr $ makeAttributeBehavior w cc' attr
+  setAttr t@(WXTimer _ _ _ cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr t attr >> return ()
+  create (AnyContainer parent, tm) = do
+    AnyWXWindow w <- return $ getWXWindow parent
+    createWindow $ WXTimer <$> WX.timer w [WX.interval := tm] <*> liftIO randomIO <*> H.new <*> H.new
+  react w ev reactor = addReactors [reaction ev (reactor w)]
+
+instance ReactiveWidget WXTimer where
+  updateAttributes st (WXTimer _ _ cc _) = updateAllAttributes st cc
+
+instance CommandEventSource WXTimer where
+  onCommand (WXTimer timer timerId _ _) = registerListener >> return (fromWXEvent eventFilter)
+    where
+      registerListener = eventTransformer >>= \fn -> liftIO $ WX.set timer [WX.on WX.command := fn]
+      eventTransformer = standardEventReceiver $ WXCommand timerId
+      eventFilter (WXCommand id') | timerId == id' = Just ()
+      eventFilter _ = Nothing
+    
+createWXTimer :: Container c => c -> Int -> Druid WXTimer
+createWXTimer parent interval = create (AnyContainer parent, interval)
+

@@ -15,9 +15,8 @@ build-type:          Simple
 cabal-version:       >=1.8
 
 library
-  build-depends:       base, wx, wxcore, time, transformers, mtl, random, hashtables
-  exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine,
-                       Druid.EngineM, Druid.ReactiveUI, Druid.Types,
+  build-depends:       base, wx, wxcore, time, transformers, mtl, random, hashtables, unordered-containers
+  exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine, Druid.ReactiveUI
                        Druid.WXExtensions, Druid.Layout
 
 executable test-simple-click-counter
@@ -25,37 +24,47 @@ executable test-simple-click-counter
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-simple-counter
-  main-is:             simple-counter.hs
+executable test-simple-control-generation
+  main-is:             simple-control-generation.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-simple-animating-button
-  main-is:             simple-animating-button.hs
+executable test-simple-control-generation-2
+  main-is:             simple-control-generation-2.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-random-buttons
-  main-is:             random-buttons.hs
-  hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, time, transformers, mtl, random
+--executable test-simple-counter
+  --main-is:             simple-counter.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-reactive-properties
-  main-is:             reactive-properties.hs
-  hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, time, transformers, mtl, random
+--executable test-simple-animating-button
+  --main-is:             simple-animating-button.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-graphics-components
-  main-is:             graphics-components.hs
-  hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, time, transformers, mtl, random
+--executable test-random-buttons
+  --main-is:             random-buttons.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-reactive-graphics
-  main-is:             reactive-graphics.hs
-  hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, time, transformers, mtl, random
+--executable test-reactive-properties
+  --main-is:             reactive-properties.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
 
-executable test-rb-arithmetic
-  main-is:             rb-arithmetic.hs
-  hs-source-dirs:      tests
-  build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random
+--executable test-graphics-components
+  --main-is:             graphics-components.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+--executable test-reactive-graphics
+  --main-is:             reactive-graphics.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+--executable test-rb-arithmetic
+  --main-is:             rb-arithmetic.hs
+  --hs-source-dirs:      tests
+  --build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random

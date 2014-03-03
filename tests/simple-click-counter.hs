@@ -2,38 +2,26 @@ module Main where
 
 import Druid.DruidMonad
 import Druid.Engine
-import qualified Druid.EngineM as EM
 import Druid.Controls
-
 import Druid.ReactiveUI
+
+import Control.Monad.IO.Class
 
 import Graphics.UI.WX hiding (Button, Frame, Panel, Widget, Event)
 import qualified Graphics.UI.WX as WX
 
-import Control.Monad
-import Control.Monad.IO.Class
-import Control.Applicative
-import System.Exit
-import System.Environment(getArgs)
+-- Simple counter created by attaching a (guarded) behavior to a label's text property
 
-import System.Random
-
-gui :: Druid(Behavior (Druid ()))
-gui = do
-  f <- createFrame [text := "Click Count", on closing := exitSuccess]
-  l <- createLabel f [text := "Count"]
-  b <- createButton f [text := "Press Me"]
-  setProperties f [size := sz 150 50]
-  setProperties l [fontSize := 20]
-  setProperties b [position := point 50 0]
-  makeBehavior f l b
-  where
-    makeBehavior :: Frame -> Label -> Button -> Druid(Behavior (Druid ()))
-    makeBehavior f l b = do
-      event <- onCommand b
-      let beh = accum (0::Integer) (event  -=> (1 +)) 
-      let beh' = lift1 show beh |-> (l, text)
-      return beh'
+gui :: Druid ()
+gui = do 
+  f <- createWXFrame
+  l <- createWXLabel f
+  b <- createWXButton f
+  setAttrs f [size :=~ sz 400 200]
+  setAttrs l [fontSize :=~ 20, position :=~ point 200 50]
+  setAttrs b [position :=~ point 50 50, text :=~ "Click"]
+  beh <- onCommand b >>= \ev -> return $ show `lift1` ( accum (0::Integer) (ev -=> (1 +)) )
+  setAttr l text $ beh 
 
 main :: IO ()
 main = start $ startEngine gui

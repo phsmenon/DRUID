@@ -1,15 +1,7 @@
-module Druid.TypeUtils -- (
---  BD, BB, BS
---) 
-where
+module Druid.TypeUtils where
 
-import Druid.Types
 import Druid.Engine
-
------------------------------------------------------------
--- Abbrevations for common behavior types
------------------------------------------------------------
-
+import Druid.DruidMonad
 
 -----------------------------------------------------------
 -- Helpers for Numeric Behaviors
@@ -25,7 +17,6 @@ instance Num a => Num (Behavior a) where
   fromInteger i = lift0 (fromInteger i)
   signum        = error "Cant use signum on behaviors"
 
-  
 -- Make (most) methods in Fractional reactive
 instance Fractional a => Fractional (Behavior a)
   where
@@ -49,14 +40,4 @@ instance Fractional a => Fractional (Behavior a)
 
 (+++) :: BS -> BS -> BS
 (+++) = lift2 (++)
-
------------------------------------------------------------
--- Helper instances for Vec
------------------------------------------------------------
-
-instance Vec Integer where
-  (*^) = (*)
-
-instance Vec Double where
-  (*^) = (*)
 

@@ -20,6 +20,17 @@ type BD  = Behavior Double
 type BB  = Behavior Bool
 type BS  = Behavior String
 
+------------------------------------------------------
+-- Helper Types
+------------------------------------------------------
+
+-- This class represents values that can be scaled
+class Num a => Vec a where
+  (*^) :: Double -> a -> a
+
+instance Vec Double where
+  (*^) = (*)
+
 -----------------------------------------------------------------
 -- Basic lifters
 -----------------------------------------------------------------
@@ -279,35 +290,6 @@ reaction e action = f e where
                                     maybe (return ()) action ev'
                                     return (f e', ())
   
-------------------------------------------------------
--- Lifting standard types
-------------------------------------------------------
-
-
-instance Num a => Num (Behavior a) where
-  (+)           = lift2 (+)
-  (-)           = lift2 (-)
-  (*)           = lift2 (*)
-  abs           = lift1 abs
-  negate        = lift1 negate
-  fromInteger i = lift0 (fromInteger i)
-  signum        = error "Cant use signum on behaviors"
-  
--- Make methods in Fractional reactive
-
-instance Fractional a => Fractional (Behavior a)
-  where
-    (/) = lift2 (/)
-    fromRational r = lift0 (fromRational r)
-
--- This class represents values that can be scaled
---
-class Num a => Vec a where
-  (*^) :: Double -> a -> a
-
-instance Vec Double where
-  (*^) = (*)
-
 ------------------------------------------------------
 -- Reactive Loop
 ------------------------------------------------------

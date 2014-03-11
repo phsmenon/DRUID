@@ -306,6 +306,7 @@ runReactors st = do
   clearReactors
   next' <- mapM (\r -> stepBehavior st r >>= return . fst) current
   addReactors next'
+  -- traceDruidDataMsg "From Run Reactors "
 
 -- Take a single step with the engine
 stepEngine :: Stimulus -> Druid ()

@@ -39,6 +39,7 @@ class ReactiveProxy w where
   getAttr :: Typeable a => w -> Attribute w a -> Druid (Behavior a)
   setAttr :: Typeable a => w -> Attribute w a -> Behavior a -> Druid ()
   -- removeObject :: w -> Druid ()
+  now     :: Typeable a => w -> Attribute w a -> Druid a
   react   :: w -> Event e -> (w -> e -> Druid ()) -> Druid ()
 
 class ReactiveProxy w => ReactiveWidget w where

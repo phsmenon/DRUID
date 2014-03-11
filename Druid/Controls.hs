@@ -59,13 +59,12 @@ data AnyCachedProperty = forall a. Typeable a => AnyCachedProperty (Maybe (Doubl
 type PropertyCache = H.BasicHashTable String AnyCachedProperty
 
 
-toCachedProperty :: Typeable a => AnyCachedProperty -> CachedProperty a
-toCachedProperty (AnyCachedProperty cc beh) = CachedProperty (fromJust $ gcast cc) (fromJust $ gcast beh)
-
 getFromCache :: Typeable a => PropertyCache -> WX.Attr w a -> Druid (Maybe (CachedProperty a))
 getFromCache cache attr =
     liftIO $ H.lookup cache (WX.attrName attr) >>= return . toMaybeCachedProperty
     
+toCachedProperty :: Typeable a => AnyCachedProperty -> CachedProperty a
+toCachedProperty (AnyCachedProperty cc beh) = CachedProperty (fromJust $ gcast cc) (fromJust $ gcast beh)
 
 toMaybeCachedProperty :: Typeable a => Maybe AnyCachedProperty -> Maybe (CachedProperty a)
 toMaybeCachedProperty = maybe Nothing (Just . toCachedProperty) 
@@ -78,16 +77,17 @@ updateCache cache attr (CachedProperty cp beh) = liftIO $ H.insert cache (WX.att
 
 updateAssociatedBehavior :: Typeable a => PropertyCache -> WX.Attr w a -> Behavior a -> Druid ()
 updateAssociatedBehavior cache attr beh = do
-    CachedProperty cv _ <- getFromCacheWithDefault cache attr (CachedProperty Nothing Nothing)
+    -- CachedProperty cv _ <- getFromCacheWithDefault cache attr (CachedProperty Nothing Nothing)
     -- traceDruidDataMsg $ "Updating behavior: "
-    updateCache cache attr $ CachedProperty cv (Just beh)
+    -- Completely clear the cache including any previously stored value. This should cause the behavior
+    -- to update itself immediately.
+    updateCache cache attr $ CachedProperty Nothing (Just beh)
 
 ------------------------------------------------------------------------------------------------------------
 
 data AnyAttributeBehavior = forall a. Typeable a => AnyAttributeBehavior (Behavior a)
 
 type AttributeBehaviorCache = H.BasicHashTable String AnyAttributeBehavior
-
 
 getOrAddBehavior :: Typeable a => AttributeBehaviorCache -> WX.Attr w a -> Behavior a -> Druid (Behavior a)
 getOrAddBehavior cc attr beh = do
@@ -159,6 +159,15 @@ standardEventReceiver ev = do
   ref <- getStepperDataRef
   return $ addEvent ev >> {- liftIO (traceIO "Event handling") >> -} stepEngineIO ref >> popEvent
 
+getCurrentBehaviorValue :: Typeable a => w -> PropertyCache -> WX.Attr w a -> Druid a
+getCurrentBehaviorValue w cc attr = do
+  prop <- getFromCache cc attr
+  let cv = hasCachedValue prop
+  if (isJust cv) then return $ fromJust cv else liftIO $ WX.get w attr
+  where
+    hasCachedValue (Just (CachedProperty (Just (_,v)) _)) = Just v
+    hasCachedValue _ = Nothing
+
 -------------------------------------------------------------------------------------------------
 
 -- Crude. Will be fixed with factorizing Druid
@@ -175,17 +184,24 @@ popEvent = modifyIORef eventQueue tail
 getLatestEvent :: Druid (Maybe WXEvent)
 getLatestEvent = liftIO $ readIORef eventQueue >>= \q -> if null q then return Nothing else return $ Just (head q)
 
+fromWXEvent :: (WXEvent -> Maybe v) -> Event v
+fromWXEvent fn = f
+  where f = Event(\_ -> getLatestEvent  >>= \ev -> return (f, maybe Nothing fn ev))
+
 -------------------------------------------------------------------------------------------------
 
-data WXEvent = WXCommand Int
+data WXEvent
+  = WXCommand Int
+  | WXTextChange Int
   deriving Eq
+
+-------------------------------------------------------------------------------------------------
 
 class CommandEventSource w where
   onCommand :: w -> Druid (Event ())
 
-fromWXEvent :: (WXEvent -> Maybe v) -> Event v
-fromWXEvent fn = f
-  where f = Event(\_ -> getLatestEvent  >>= \ev -> return (f, maybe Nothing fn ev))
+class TextChangeEventSource w where
+  onTextChange :: w -> Druid (Event())
 
 -------------------------------------------------------------------------------------------------
 
@@ -202,6 +218,7 @@ instance ReactiveProxy WXFrame where
   setAttr f@(WXFrame _ _ cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr f attr >> return ()
   create _ = createWindow $ WXFrame <$> WXExt.createFrame [] <*> H.new <*> H.new
   react w ev reactor = addReactors [reaction ev (reactor w)]
+  now f@(WXFrame w _ cc') attr = getAttr f attr >> getCurrentBehaviorValue w cc' attr
 
 instance ReactiveWidget WXFrame where
   updateAttributes st (WXFrame _ cc _) = updateAllAttributes st cc
@@ -227,6 +244,7 @@ instance ReactiveProxy WXButton where
     connCache <- liftIO $ H.new
     createWindow . return $ WXButton button buttonId attrCache connCache
   react w ev reactor = addReactors [reaction ev (reactor w)]
+  now b@(WXButton w _ _ cc') attr = getAttr b attr >> getCurrentBehaviorValue w cc' attr
 
 instance ReactiveWidget WXButton where
   updateAttributes st (WXButton _ _ cc _) = updateAllAttributes st cc
@@ -256,6 +274,7 @@ instance ReactiveProxy WXLabel where
     AnyWXWindow w <- return $ getWXWindow parent
     createWindow $ WXLabel <$> WX.staticText w [] <*> H.new <*> H.new
   react w ev reactor = addReactors [reaction ev (reactor w)]
+  now l@(WXLabel w _ cc') attr = getAttr l attr >> getCurrentBehaviorValue w cc' attr
 
 instance ReactiveWidget WXLabel where
   updateAttributes st (WXLabel _ cc _) = updateAllAttributes st cc
@@ -277,6 +296,7 @@ instance ReactiveProxy WXTimer where
     AnyWXWindow w <- return $ getWXWindow parent
     createWindow $ WXTimer <$> WX.timer w [WX.interval := tm] <*> liftIO randomIO <*> H.new <*> H.new
   react w ev reactor = addReactors [reaction ev (reactor w)]
+  now t@(WXTimer w _ _ cc') attr = getAttr t attr >> getCurrentBehaviorValue w cc' attr
 
 instance ReactiveWidget WXTimer where
   updateAttributes st (WXTimer _ _ cc _) = updateAllAttributes st cc
@@ -291,4 +311,41 @@ instance CommandEventSource WXTimer where
     
 createWXTimer :: Container c => c -> Int -> Druid WXTimer
 createWXTimer parent interval = create (AnyContainer parent, interval)
+
+-------------------------------------------------------------------------------------------------
+
+data WXTextEntry = WXTextEntry (WX.TextCtrl ()) Int AttributeBehaviorCache PropertyCache
+
+instance ReactiveProxy WXTextEntry where
+  type Attribute WXTextEntry = WX.Attr (WX.TextCtrl ())
+  type CreateAttr WXTextEntry = AnyContainer
+  getName (WXTextEntry w _ _ _) = liftIO $ WX.get w WX.identity >>= return . show
+  getAttr (WXTextEntry w _ cc cc') attr = getOrAddBehavior cc attr $ makeAttributeBehavior w cc' attr
+  setAttr l@(WXTextEntry _ _ _ cc') attr beh = deferUpdateOp $ updateAssociatedBehavior cc' attr beh >> getAttr l attr >> return ()
+  create (AnyContainer parent) = do
+    AnyWXWindow w <- return $ getWXWindow parent
+    textEntry <- liftIO $ WX.textEntry w [] 
+    textEntryId <- liftIO $ WX.get textEntry WX.identity
+    attrCache <- liftIO H.new
+    propCache <- liftIO H.new
+    createWindow . return $ WXTextEntry textEntry textEntryId attrCache propCache
+  react w ev reactor = addReactors [reaction ev (reactor w)]
+  now t@(WXTextEntry w _ _ cc') attr = getAttr t attr >> getCurrentBehaviorValue w cc' attr
+
+instance ReactiveWidget WXTextEntry where
+  updateAttributes st (WXTextEntry _ _ cc _) = updateAllAttributes st cc
+
+createWXTextEntry :: Container c => c -> Druid WXTextEntry
+createWXTextEntry parent = create (AnyContainer parent)
+
+textChange :: WX.Event (WXCore.Control a) (IO ())
+textChange = WX.newEvent "textChange" (WXCore.controlGetOnText) (WXCore.controlOnText)
+
+instance TextChangeEventSource WXTextEntry where
+  onTextChange (WXTextEntry w wid _ _) = registerListener >> return (fromWXEvent eventFilter)
+    where
+      registerListener = eventTransformer >>= \fn -> liftIO $ WX.set w [WX.on textChange := fn]
+      eventTransformer = standardEventReceiver $ WXTextChange wid
+      eventFilter (WXTextChange id') | wid == id' = Just ()
+      eventFilter _ = Nothing
 

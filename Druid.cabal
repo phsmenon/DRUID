@@ -34,6 +34,11 @@ executable test-simple-control-generation-2
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
 
+executable test-simple-adder
+  main-is:             simple-adder.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, time, transformers, mtl, random
+
 --executable test-simple-counter
   --main-is:             simple-counter.hs
   --hs-source-dirs:      tests

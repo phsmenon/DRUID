@@ -14,10 +14,12 @@ category:            Development
 build-type:          Simple
 cabal-version:       >=1.8
 
+
 library
-  build-depends:       base, wx, wxcore, time, transformers, mtl, random, hashtables, unordered-containers
-  exposed-modules:     Druid.Controls, Druid.DruidMonad, Druid.Engine, Druid.ReactiveUI
-                       Druid.WXExtensions, Druid.Layout, Druid.TypeUtils
+  build-depends:       base, wx, wxcore, time, transformers, mtl, random, hashtables, containers, unordered-containers
+  exposed-modules:     Druid.WX.Controls, Druid.WX.DruidMonad, Druid.WX.ReactiveUI, Druid.Engine
+                       Druid.WXExtensions, Druid.Layout, Druid.TypeUtils, Druid.Combinators, Druid.EngineMonad,
+                       Druid.WX.Cache, Druid.WX.Frp, Druid.WX.Types
 
 executable test-simple-click-counter
   main-is:             simple-click-counter.hs
@@ -38,6 +40,22 @@ executable test-simple-adder
   main-is:             simple-adder.hs
   hs-source-dirs:      tests
   build-depends:       Druid, base, wx, time, transformers, mtl, random
+
+executable test-reactive-graphics
+  main-is:             simple-reactive-graphics.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random
+
+executable test-simple-image-browser
+  main-is:             simple-image-browser.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random, directory
+
+executable test-simple-pong
+  main-is:             simple-pong.hs
+  hs-source-dirs:      tests
+  build-depends:       Druid, base, wx, wxcore, time, transformers, mtl, random
+
 
 --executable test-simple-counter
   --main-is:             simple-counter.hs

@@ -2,10 +2,7 @@
 
 module Main where
 
-import Druid.DruidMonad
-import Druid.Engine
-import Druid.Controls
-import Druid.ReactiveUI
+import Druid.WX.Frp
 
 import Data.Maybe
 import Text.Read
@@ -18,18 +15,17 @@ import Graphics.UI.WX hiding (Event)
 
 gui :: Druid ()
 gui = do 
-  f <- createWXFrame 
-  a <- createWXTextEntry f 
-  b <- createWXTextEntry f 
-  l <- createWXLabel f 
-  desc <- createWXLabel f 
+  f <- createWXFrame [text :=~ "Arithmetic"]
+  a <- createWXTextEntry f []
+  b <- createWXTextEntry f []
+  l <- createWXLabel f []
+  desc <- createWXLabel f [ text :=~ "Enter numbers in the text fields to add them"]
   atext <- getAttr a text
   btext <- getAttr b text
-  setAttrs f [text :=~ "Arithmetic", size :=~ sz 230 140]
-  setAttrs desc [position :=~ point 10 10, text :=~ "Enter numbers in the text fields to add them"]
-  setAttrs a [position :=~ point 10 30, size :=~ sz 50 25]
-  setAttrs b [position :=~ point 70 30, size :=~ sz 50 25]
-  setAttrs l [position :=~ point 130 30, size :=~ sz 40 30, fontSize :=~ 14, text :=: lift2 addNumbers atext btext]
+  setAttrs l [text :=: lift2 addNumbers atext btext]
+  let ly = column 3 [getLayout desc, 
+                     row 3 [rigid $ getLayout a, rigid $ getLayout b, rigid $ getLayout l]]
+  setAttrs f [layout :=~ margin 20 ly]
   onTextChange a >>= \ev -> react a ev checkInteger
   onTextChange b >>= \ev -> react b ev checkInteger
   where

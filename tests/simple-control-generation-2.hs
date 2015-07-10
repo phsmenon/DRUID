@@ -1,9 +1,6 @@
 module Main where
 
-import Druid.DruidMonad
-import Druid.Engine
-import Druid.Controls
-import Druid.ReactiveUI
+import Druid.WX.Frp
 
 import Data.Char
 import Control.Applicative
@@ -18,12 +15,9 @@ import Graphics.UI.WX
 
 gui :: Druid ()
 gui = do
-  f <- createWXFrame
-  l <- createWXLabel f
-  b <- createWXButton f
-  setAttrs f [size :=~ sz 800 800]
-  setAttrs l [text :=~ "Generate new buttons by clicking on *any* button"]
-  setAttrs b [position :=~ point 0 25, size :=~ sz 100 50, text :=~ "A"]
+  f <- createWXFrame [size :=~ sz 800 800]
+  l <- createWXLabel f [text :=~ "Generate new buttons by clicking on *any* button"]
+  b <- createWXButton f [position :=~ point 0 25, size :=~ sz 100 50, text :=~ "A"]
   onCommand b >>= \ev -> react b ev (generateRandomButton f)
   where
     generateRandomButton :: WXFrame -> WXButton -> a -> Druid ()
@@ -32,7 +26,7 @@ gui = do
       s <- liftIO $ randomRIO (50, 100) >>= \x -> return $ sz x 40
       c <- liftIO $ randomRIO (0, 2) >>= \i -> return ( [red, green, blue] !! i )
       t <- liftIO $ randomRIO (0, 10) :: (Druid Int)
-      b <- createWXButton f
+      b <- createWXButton f []
       stext <- getAttr source text
       setAttrs b [position :=~ p, size :=~ s, bgcolor :=~ c, text :=: (lift1 appendNext stext) ]
       onCommand b >>= \ev -> react b ev (generateRandomButton f)

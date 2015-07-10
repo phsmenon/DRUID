@@ -1,14 +1,15 @@
+{-# LANGUAGE TypeSynonymInstances, FlexibleInstances, FlexibleContexts  #-}
 module Druid.TypeUtils where
 
 import Druid.Engine
-import Druid.DruidMonad
+import Druid.WX.DruidMonad
 
 -----------------------------------------------------------
 -- Helpers for Numeric Behaviors
 -----------------------------------------------------------
 
 -- Make (most) methods in Num reactive
-instance Num a => Num (Behavior a) where
+instance (Monad m, Num a) => Num (SignalC m a) where
   (+)           = lift2 (+)
   (-)           = lift2 (-)
   (*)           = lift2 (*)
@@ -18,7 +19,7 @@ instance Num a => Num (Behavior a) where
   signum        = error "Cant use signum on behaviors"
 
 -- Make (most) methods in Fractional reactive
-instance Fractional a => Fractional (Behavior a)
+instance (Fractional a, Monad m) => Fractional (SignalC m a)
   where
     (/) = lift2 (/)
     fromRational r = lift0 (fromRational r)
@@ -30,7 +31,7 @@ instance Fractional a => Fractional (Behavior a)
 -----------------------------------------------------------
 
 -- Make reactive versions of && and ||
-(&&*), (||*) :: BB -> BB -> BB
+(&&*), (||*) :: Monad m => SignalC m Bool -> SignalC m Bool -> SignalC m Bool
 (&&*) = lift2 (&&)
 (||*) = lift2 (||)
 
@@ -38,6 +39,6 @@ instance Fractional a => Fractional (Behavior a)
 -- Helpers for String Behaviors
 -----------------------------------------------------------
 
-(+++) :: BS -> BS -> BS
+(+++) :: Monad m => SignalC m String -> SignalC m String -> SignalC m String
 (+++) = lift2 (++)
 
